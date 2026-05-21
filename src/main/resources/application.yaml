@@ -12,6 +12,13 @@ spring:
       chat:
         options:
           model: deepseek-v3.2
+    vectorstore:
+      pinecone:
+        api-key: pcsk_7C2jsR_45eX2tKgLEFRMaCQXoWpr7tvpAvEoHHnpUwL3KJSeB1nYJjbg4bDSZPVSuNT9YR
+        index-name: aigc4lk-index
+        namespace: default
+#    openai:
+#      api-key: sk-c996bb14c60c428fb35e1f6b3741cd8e
   cloud:
     nacos:
       config: # 配置中心认证
