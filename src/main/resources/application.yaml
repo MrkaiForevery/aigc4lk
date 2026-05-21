@@ -1,3 +1,5 @@
 spring:
   application:
     name: aigc4lk
+  profiles:
+    active: local
