@@ -9,6 +9,9 @@ spring:
   ai:
     dashscope:
       api-key: sk-c996bb14c60c428fb35e1f6b3741cd8e
+      chat:
+        options:
+          model: deepseek-v3.2
   cloud:
     nacos:
       config: # 配置中心认证
