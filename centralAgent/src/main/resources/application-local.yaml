@@ -13,10 +13,15 @@ spring:
         options:
           model: deepseek-v3.2
     vectorstore:
-      pinecone:
-        api-key: pcsk_7C2jsR_45eX2tKgLEFRMaCQXoWpr7tvpAvEoHHnpUwL3KJSeB1nYJjbg4bDSZPVSuNT9YR
-        index-name: aigc4lk-index
-        namespace: default
+      chroma:
+        client:
+          host: https://api.trychroma.com
+          port: 443
+          key-token: ck-8EnXWFG3ubhyM5o9HAj8hr8Y5UERvQ8AYL9GiwoYT2aT
+        tenant-name: f67f67c5-aa2a-41f5-ba8a-ddeda867aba1
+        database-name: aigc4lk
+        collection-name: test_collection
+        initialize-schema: true
     #    mcp:
     #      client:
     #        enabled: true
