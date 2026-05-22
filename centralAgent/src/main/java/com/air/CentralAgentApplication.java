@@ -6,10 +6,9 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 @EnableDiscoveryClient
 @SpringBootApplication
-public class Aigc4lkApplication {
+public class CentralAgentApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(Aigc4lkApplication.class, args);
+        SpringApplication.run(CentralAgentApplication.class);
     }
-
 }
