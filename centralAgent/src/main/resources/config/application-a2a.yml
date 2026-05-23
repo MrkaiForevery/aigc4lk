@@ -1,0 +1,22 @@
+spring:
+  ai:
+    alibaba:
+      a2a:
+        server:
+          version: "1.0.0"
+          card:
+            name: data_analysis_agent
+            description: "专门用于数据分析和统计计算的本地智能体"
+            provider:
+              name: "lk"
+              organization: "air.com"
+              url: "https://www.air.com"
+        nacos:
+          server-addr: 127.0.0.1:8848
+          namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+          username: aigc4lk
+          password: 123456
+          registry:
+            enabled: true
+          discovery:
+            enabled: true

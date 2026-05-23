@@ -43,6 +43,12 @@
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
         </dependency>
 
+        <!-- A2A 协议与 Nacos 集成 starter (核心) -->
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-a2a-nacos</artifactId>
+        </dependency>
+
         <!--############################## spring-ai-vector ###########################-->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -72,6 +78,11 @@
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.nacos</groupId>
+            <artifactId>nacos-client</artifactId>
+            <version>3.2.0</version>
         </dependency>
 
     </dependencies>
