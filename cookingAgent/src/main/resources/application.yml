@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: aigc4lk-cooking-agent
+  config:
+    import:
+      - nacos:mytest.txt?refresh=true
+      - classpath:config/application-server.yml
+      - classpath:config/application-nacos.yml
+      - classpath:config/application-ai.yml
+      - classpath:config/application-vectorstore.yml
+      - classpath:config/application-a2a.yml

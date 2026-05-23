@@ -18,7 +18,8 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>centralAgent</module>
+        <module>commanderAgent</module>
+        <module>cookingAgent</module>
     </modules>
 
     <properties>

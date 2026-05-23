@@ -1,6 +1,6 @@
 spring:
   application:
-    name: aigc4lk-central-agent
+    name: aigc4lk-commander-agent
   config:
     import:
       - nacos:mytest.txt?refresh=true

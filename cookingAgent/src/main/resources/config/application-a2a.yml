@@ -1,0 +1,31 @@
+spring:
+  ai:
+    alibaba:
+      a2a:
+        server:
+          version: "1.0.0"
+          card:
+            name: cooking_agent
+            description: "烹饪领域专家，处理和回答一切与烹饪方面的问题"
+            skills:
+              - id: "introducing_ingredients"
+                name: "介绍食材"
+                description: "可根据用户的提问，回答食材起源,烹饪方式,加工方式,存储方式,味道,对人体的作用等等"
+                tags: [ "食材", "烹饪" ]
+                examples:
+                  - "黄瓜的起源"
+                  - "人参对人体有什么作用"
+                  - "小龙虾怎么做好吃"
+            provider:
+              name: "lk"
+              organization: "air.com"
+              url: "https://www.air.com"
+        nacos:
+          server-addr: 127.0.0.1:8848
+          namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+          username: aigc4lk
+          password: 123456
+          registry:
+            enabled: true # 启用服务注册（注册本地 Agent）
+          discovery:
+            enabled: true # 启用服务发现（查询其他 Agent）
