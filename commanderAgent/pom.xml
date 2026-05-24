@@ -34,6 +34,7 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
         <!--############################## spring-ai-alibaba ###########################-->
         <!-- Spring AI Alibaba Agent Framework -->
         <dependency>
@@ -46,33 +47,23 @@
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
         </dependency>
 
-        <!-- A2A 协议与 Nacos 集成 starter (核心) -->
-        <dependency>
-            <groupId>com.alibaba.cloud.ai</groupId>
-            <artifactId>spring-ai-alibaba-starter-a2a-nacos</artifactId>
-        </dependency>
-
         <!--############################## spring-ai-vector ###########################-->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-vector-store-chroma</artifactId>
         </dependency>
-        <!--        <dependency>-->
-        <!--            <groupId>org.springframework.ai</groupId>-->
-        <!--            <artifactId>spring-ai-starter-model-openai</artifactId>-->
-        <!--        </dependency>-->
-        <!--        <dependency>-->
-        <!--            <groupId>org.springframework.ai</groupId>-->
-        <!--            <artifactId>spring-ai-pinecone-store</artifactId>-->
-        <!--        </dependency>-->
 
         <!--############################## spring-ai-mcp ###########################-->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-client</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server</artifactId>
+        </dependency>
 
-        <!--############################## nacos ###########################-->
+        <!--############################## Nacos 3.2 配置中心/服务中心/A2A ###########################-->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
@@ -83,15 +74,18 @@
             <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-a2a-nacos</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.alibaba.nacos</groupId>
             <artifactId>nacos-client</artifactId>
-            <version>3.2.0</version>
+            <version>${nacos-client.version}</version>
         </dependency>
-
-        <!-- 用于HTTP请求获取AgentCard -->
         <dependency>
-            <groupId>org.apache.httpcomponents.client5</groupId>
-            <artifactId>httpclient5</artifactId>
+            <groupId>com.air</groupId>
+            <artifactId>platformCommon</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
         </dependency>
     </dependencies>
 
