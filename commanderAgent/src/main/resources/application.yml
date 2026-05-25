@@ -1,11 +1,16 @@
+server:
+  port: 10010
 spring:
   application:
     name: aigc4lk-commander-agent
   config:
     import:
-      - nacos:mytest.txt?refresh=true
-      - classpath:config/application-server.yml
-      - classpath:config/application-nacos.yml
-      - classpath:config/application-ai.yml
-      - classpath:config/application-vectorstore.yml
-      - classpath:config/application-a2a.yml
+      - nacos:COMMANDER_TEST.txt?refresh=true
+      - classpath:properties/application-nacos.properties
+      - classpath:properties/application-ai.properties
+      - classpath:properties/application-vectorstore.properties
+      - classpath:properties/application-a2a.properties
+      - classpath:properties/application-log.properties
+      - classpath:properties/application-platform.properties
+      - classpath:properties/application-metrics.properties
+      - classpath:properties/application-resilience4j.properties
