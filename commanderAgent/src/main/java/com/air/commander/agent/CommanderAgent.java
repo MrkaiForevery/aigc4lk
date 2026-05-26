@@ -1,6 +1,7 @@
 package com.air.commander.agent;
 
 import com.air.commander.architecture.ArchitectureSelector;
+import com.air.commander.config.ChatClientConfiguration;
 import com.air.commander.entity.*;
 import com.air.commander.intent.IntentClassifier;
 import com.air.commander.model.ChatModelRouter;
@@ -31,13 +32,23 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class CommanderAgent {
 
+    /**意图分析注入**/
     private final IntentClassifier intentClassifier;
+
+    /**架构策略注入**/
     private final ArchitectureSelector architectureSelector;
+
+    /**模型配置匹配路由器**/
     private final ChatModelRouter chatModelRouter;
-    private final ChatModel chatModel;
+
+    /**模型本地缓存--->来源于ChatClientConfiguration**/
+    private final Map<String, ChatModel> modelCache;
+
+    /**模型客户端配置实例化句柄**/
+    private final ChatClientConfiguration chatClientConfiguration;
 
     /**
-     * 执行历史
+     * 执行历史 todo 这里后期要改成外部存储，构建共享的chatMemery时需要
      */
     private final Map<String, ExecutionRecord> executionHistory = new ConcurrentHashMap<>();
 
@@ -141,16 +152,21 @@ public class CommanderAgent {
                     .selectionStrategy("fallback")
                     .build();
 
-            Map<String, Object> executionInput = Map.of(
-                    "query", request.getUserInput(),
-                    "execution_id", executionId + "-fallback",
-                    "fallback", true
-            );
+            // 降级时也通过动态创建获取模型
+            ChatModel fallbackChatModel = getOrCreateChatModel(fallbackModel);
+
+            // 构建执行参数
+            Map<String, Object> executionInput = new java.util.HashMap<>();
+            executionInput.put("query", request.getUserInput());
+            executionInput.put("execution_id", executionId + "-fallback");
+            executionInput.put("fallback", true);
+
+            // ✅ 关键：将降级模型放入输入中，传递给 executeTask
+            executionInput.put("_fallback_chat_model_", fallbackChatModel);
 
             Map<String, Object> result = executeTask(executionInput, fallbackArchitecture, fallbackModel);
 
             long durationMs = Duration.between(startTime, Instant.now()).toMillis();
-
             log.info("✅ [{}] Fallback execution completed in {}ms", executionId, durationMs);
 
             return CommanderResponse.fallback(executionId, result, t.getMessage(), durationMs);
@@ -252,10 +268,11 @@ public class CommanderAgent {
             IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
             CommanderChannel.ArchitectureSelection architecture = architectureSelector.selectArchitecture(intent);
             ModelSelection model = chatModelRouter.selectModel(intent, architecture);
+            // 动态获取模型
+            ChatModel selectedModel = getOrCreateChatModel(model);
+            ChatClient client = ChatClient.builder(selectedModel).build();
 
             Map<String, Object> executionInput = buildExecutionInput(request, intent, executionId);
-
-            ChatClient client = ChatClient.builder(chatModel).build();
 
             return Flux.just(
                     "📋 场景: " + intent.getScenario() + "\n",
@@ -298,7 +315,8 @@ public class CommanderAgent {
         log.debug("Executing sequential pipeline with model: {}", model.getModelId());
 
         // 使用 ChatClient 进行顺序处理
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatModel selectedModel = getOrCreateChatModel(model);
+        ChatClient client = ChatClient.builder(selectedModel).build();
 
         // 阶段1：分析
         String analysis = client.prompt()
@@ -342,7 +360,8 @@ public class CommanderAgent {
     private Map<String, Object> executeParallel(Map<String, Object> input, ModelSelection model) {
         log.debug("Executing parallel analysis with model: {}", model.getModelId());
 
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatModel selectedModel = getOrCreateChatModel(model);
+        ChatClient client = ChatClient.builder(selectedModel).build();
 
         // 并行分析多个维度
         String dimension1 = client.prompt()
@@ -398,7 +417,8 @@ public class CommanderAgent {
     private Map<String, Object> executeLlmRouting(Map<String, Object> input, ModelSelection model) {
         log.debug("Executing LLM routing with model: {}", model.getModelId());
 
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatModel selectedModel = getOrCreateChatModel(model);
+        ChatClient client = ChatClient.builder(selectedModel).build();
 
         // LLM决定路由到哪个处理器
         String routingDecision = client.prompt()
@@ -441,7 +461,8 @@ public class CommanderAgent {
     private Map<String, Object> executeCustomGraph(Map<String, Object> input, ModelSelection model) {
         log.debug("Executing custom graph with model: {}", model.getModelId());
 
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatModel selectedModel = getOrCreateChatModel(model);
+        ChatClient client = ChatClient.builder(selectedModel).build();
 
         // 多轮辩论
         StringBuilder debateHistory = new StringBuilder();
@@ -489,7 +510,8 @@ public class CommanderAgent {
     private Map<String, Object> executeDefault(Map<String, Object> input, ModelSelection model) {
         log.debug("Executing default pipeline with model: {}", model.getModelId());
 
-        ChatClient client = ChatClient.builder(chatModel).build();
+        ChatModel selectedModel = getOrCreateChatModel(model);
+        ChatClient client = ChatClient.builder(selectedModel).build();
 
         String result = client.prompt()
                 .user(userMessage -> userMessage
@@ -584,11 +606,33 @@ public class CommanderAgent {
     }
 
     /**
-     * 自定义异常 todo 这个要提出来
+     * 自定义异常 todo 这个异常的要提出来
      */
     public static class CommanderExecutionException extends RuntimeException {
         public CommanderExecutionException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    /**
+     * 根据 ModelSelection 动态创建 ChatModel
+     */
+    private ChatModel getOrCreateChatModel(ModelSelection model) {
+        String modelId = model.getModelId();
+
+        // 1. 先从缓存中获取
+        ChatModel chatModel = modelCache.get(modelId);
+        if (chatModel != null) {
+            return chatModel;
+        }
+
+        // 2. 缓存中没有，则通过 ChatClientConfiguration 创建
+        log.info("Creating new ChatModel for: {}", modelId);
+        chatModel = chatClientConfiguration.createModel(modelId);
+
+        // 3. 放入缓存
+        modelCache.put(modelId, chatModel);
+
+        return chatModel;
     }
 }

@@ -27,11 +27,12 @@ public class ChatClientConfiguration {
     private final ChatModelRouter chatModelRouter;
 
     /**
+     * 初始化的模型缓存bean，整个应用都可以使用
      * 模型缓存：modelId -> ChatModel
      * 支持动态创建和缓存不同类型的模型实例
      */
     @Bean
-    public Map<String, ChatModel> modelCache() {
+    public Map<String, ChatModel> modelCaChatClientConfigurationche() {
         return new ConcurrentHashMap<>();
     }
 
@@ -91,19 +92,29 @@ public class ChatClientConfiguration {
     public ChatModel createModel(String modelId) {
         //根据模型id，获取模型的配置定义
         ModelDefinition def = chatModelRouter.getModelDefinition(modelId);
+        if (def == null) {
+            log.warn("Model definition not found for '{}', using built-in fallback", modelId);
+            return createFallbackModel();
+        }
         return createModel(def);
+    }
+
+    private ChatModel createFallbackModel() {
+        return DashScopeChatModel.builder()
+                .dashScopeApi(dashScopeApi())
+                .defaultOptions(DashScopeChatOptions.builder()
+                        .model("qwen-turbo")
+                        .temperature(0.7)
+                        .maxToken(2048)
+                        .build())
+                .build();
     }
 
     /**
      * 根据 ModelDefinition 创建对应的 ChatModel
      */
     public ChatModel createModel(ModelDefinition def) {
-        if (def == null) {
-            throw new IllegalArgumentException("Model definition is null");
-        }
-
         log.info("Creating ChatModel: {} (type: {})", def.getModelId(), def.getType());
-
         return switch (def.getType()) {
             case DASHSCOPE -> createDashScopeModel(def);
             case OPENAI_COMPATIBLE -> createOpenAICompatibleModel(def);
@@ -116,7 +127,8 @@ public class ChatClientConfiguration {
      * 创建 DashScope（通义系列）模型
      */
     private ChatModel createDashScopeModel(ModelDefinition def) {
-        DashScopeApi api = dashScopeApi();  // 复用同一个 API 客户端
+        //复用同一个 API 客户端
+        DashScopeApi api = dashScopeApi();
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()

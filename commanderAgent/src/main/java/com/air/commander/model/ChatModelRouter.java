@@ -2,6 +2,7 @@ package com.air.commander.model;
 
 import com.air.commander.config.ChatModelRoutingConfig;
 import com.air.commander.config.CommanderMetaConfig;
+import com.air.commander.entity.CommanderModelDefinition;
 import com.air.commander.entity.IntentAnalysis;
 import com.air.commander.entity.ModelSelection;
 import com.air.platform.common.a2a.channel.CommanderChannel;
@@ -98,15 +99,15 @@ public class ChatModelRouter {
      */
     public List<ModelDefinition> getAvailableModels() {
         return chatModelRoutingConfig.getModels().stream()
-                .filter(ChatModelRoutingConfig.CommanderModelDefinition::isEnabled)
+                .filter(CommanderModelDefinition::isEnabled)
                 .map(this::convertToPlatformModel)
                 .collect(Collectors.toList());
     }
 
     /**
-     * 将 Nacos 配置中的 ModelDefinition 转换为平台通用 ModelDefinition
+     * 将 Nacos 配置中的 ModelDefinition 转换为platformCommon中通用 ModelDefinition
      */
-    private ModelDefinition convertToPlatformModel(ChatModelRoutingConfig.CommanderModelDefinition configDef) {
+    private ModelDefinition convertToPlatformModel(CommanderModelDefinition configDef) {
         return ModelDefinition.builder()
                 .modelId(configDef.getModelId())
                 .modelName(configDef.getModelName())
