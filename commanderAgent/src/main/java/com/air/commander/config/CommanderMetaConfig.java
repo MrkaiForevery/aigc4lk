@@ -5,7 +5,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.HashMap;
 import java.util.Map;
+
+/**
+ * 从Nacos配置中心中读取platform-commander-config.yaml元数据，并监听配置变化
+ */
 
 @Data
 @Configuration
@@ -25,15 +30,15 @@ public class CommanderMetaConfig {
     /**
      * 场景到架构的默认映射
      */
-    private Map<String, String> scenarioArchitectureMapping = Map.of(
-        "DOCUMENT_GENERATION", "sequential-pipeline",
-        "MARKET_ANALYSIS", "parallel-analysis",
-        "INVESTMENT_DECISION", "debate-system",
-        "CUSTOMER_SERVICE", "smart-routing",
-        "IMAGE_ANALYSIS", "sequential-pipeline",
-        "SPEECH_RECOGNITION", "sequential-pipeline",
-        "VIDEO_ANALYSIS", "sequential-pipeline"
-    );
+    private Map<String, String> scenarioArchitectureMapping = new HashMap<>() {{
+        put("DOCUMENT_GENERATION", "sequential-pipeline");
+        put("MARKET_ANALYSIS", "parallel-analysis");
+        put("INVESTMENT_DECISION", "debate-system");
+        put("CUSTOMER_SERVICE", "smart-routing");
+        put("IMAGE_ANALYSIS", "sequential-pipeline");
+        put("SPEECH_RECOGNITION", "sequential-pipeline");
+        put("VIDEO_ANALYSIS", "sequential-pipeline");
+    }};
     
     /**
      * 复杂度到模型的默认映射

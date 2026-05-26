@@ -3,7 +3,7 @@ package com.air.commander.controller;
 import com.air.commander.agent.CommanderAgent;
 import com.air.commander.entity.CommanderRequest;
 import com.air.commander.entity.ExecutionRecord;
-import com.air.commander.model.ModelRouter;
+import com.air.commander.model.ChatModelRouter;
 import com.air.platform.common.model.ModelDefinition;
 import com.air.platform.common.tranfer.CommanderResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ import java.util.UUID;
 public class CommanderController {
 
     private final CommanderAgent commanderAgent;
-    private final ModelRouter modelRouter;
+    private final ChatModelRouter chatModelRouter;
 
     // ==================== 执行接口 ====================
 
@@ -209,7 +209,7 @@ public class CommanderController {
      */
     @GetMapping("/models")
     public ResponseEntity<List<ModelDefinition>> getModels() {
-        return ResponseEntity.ok(modelRouter.getAvailableModels());
+        return ResponseEntity.ok(chatModelRouter.getAvailableModels());
     }
 
     /**

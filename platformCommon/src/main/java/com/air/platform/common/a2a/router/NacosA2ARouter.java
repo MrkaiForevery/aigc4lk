@@ -120,7 +120,6 @@ public class NacosA2ARouter implements A2ARouter {
     
     @Override
     public void registerAgent(AgentMetadata metadata) {
-        // 注册由 spring.ai.alibaba.a2a.nacos.registry.enabled=true 自动完成
         // 无需手动实现
         log.info("Agent registration is handled automatically by framework: {}", metadata.getAgentId());
     }

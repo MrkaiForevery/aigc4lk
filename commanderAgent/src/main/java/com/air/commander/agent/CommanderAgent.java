@@ -3,7 +3,7 @@ package com.air.commander.agent;
 import com.air.commander.architecture.ArchitectureSelector;
 import com.air.commander.entity.*;
 import com.air.commander.intent.IntentClassifier;
-import com.air.commander.model.ModelRouter;
+import com.air.commander.model.ChatModelRouter;
 import com.air.platform.common.a2a.channel.CommanderChannel;
 import com.air.platform.common.tranfer.CommanderResponse;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -33,7 +33,7 @@ public class CommanderAgent {
 
     private final IntentClassifier intentClassifier;
     private final ArchitectureSelector architectureSelector;
-    private final ModelRouter modelRouter;
+    private final ChatModelRouter chatModelRouter;
     private final ChatModel chatModel;
 
     /**
@@ -65,7 +65,7 @@ public class CommanderAgent {
                     executionId, architecture.getArchitectureId(), architecture.getSelectionReason());
 
             // 阶段3：模型选择
-            ModelSelection model = modelRouter.selectModel(intent, architecture);
+            ModelSelection model = chatModelRouter.selectModel(intent, architecture);
             log.info("🤖 [{}] Model: {} ({})",
                     executionId, model.getModelId(), model.getProvider());
 
@@ -184,7 +184,7 @@ public class CommanderAgent {
 
                 // 阶段3：模型选择
                 pushProgress(sink, executionId, "MODEL_SELECTION");
-                ModelSelection model = modelRouter.selectModel(intent, architecture);
+                ModelSelection model = chatModelRouter.selectModel(intent, architecture);
 
                 // 阶段4-5：执行任务
                 pushProgress(sink, executionId, "TASK_EXECUTION");
@@ -251,7 +251,7 @@ public class CommanderAgent {
         return Flux.defer(() -> {
             IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
             CommanderChannel.ArchitectureSelection architecture = architectureSelector.selectArchitecture(intent);
-            ModelSelection model = modelRouter.selectModel(intent, architecture);
+            ModelSelection model = chatModelRouter.selectModel(intent, architecture);
 
             Map<String, Object> executionInput = buildExecutionInput(request, intent, executionId);
 

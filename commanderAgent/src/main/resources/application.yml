@@ -5,12 +5,40 @@ spring:
     name: aigc4lk-commander-agent
   config:
     import:
-      - nacos:COMMANDER_TEST.txt?refresh=true
-      - classpath:properties/application-nacos.properties
-      - classpath:properties/application-ai.properties
-      - classpath:properties/application-vectorstore.properties
-      - classpath:properties/application-a2a.properties
-      - classpath:properties/application-log.properties
-      - classpath:properties/application-platform.properties
-      - classpath:properties/application-metrics.properties
-      - classpath:properties/application-resilience4j.properties
+      - nacos:platform-commander-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:platform-model-routing-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:comander-resilience4j.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:chat-model-api-keys.properties?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:spring-ai-chroma-vectorstore-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:spring-ai-mcp-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:staic-application-metrics.yaml?refreshEnabled=false&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+  cloud:
+    nacos:
+      # Nacos 服务发现配置
+      discovery:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        group: COMMANDER_GROUP
+        username: aigc4lk
+        password: 123456
+      # Nacos 配置中心配置
+      config:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        group: COMMANDER_GROUP
+        username: aigc4lk
+        password: 123456
+        cluster-name: aigc4lk-commander-agent-cluster
+  ai:
+    alibaba:
+      a2a:
+        nacos:
+          # Spring AI Alibaba A2A 配置
+          server-addr: 127.0.0.1:8848
+          namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+          username: aigc4lk
+          password: 123456
+          registry:
+            enabled: false
+          discovery:
+            enabled: true
