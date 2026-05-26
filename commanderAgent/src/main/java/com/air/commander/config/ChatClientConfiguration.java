@@ -1,13 +1,13 @@
 package com.air.commander.config;
 
+import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import com.air.commander.model.ChatModelRouter;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.air.platform.common.model.ModelDefinition;
-import com.alibaba.cloud.ai.dashscope.spec.DashScopeModel;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.inject.Qualifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
