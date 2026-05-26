@@ -50,6 +50,8 @@ spring:
             enabled: false
           discovery:
             enabled: true
+    model:
+      embedding: dashscope
 
 
 logging:

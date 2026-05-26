@@ -1,9 +1,6 @@
 package com.air.commander;
 
-import com.air.commander.config.ChatModelApiKeyConfig;
-import com.air.commander.config.ChatModelRoutingConfig;
-import com.air.commander.config.CommanderMetaConfig;
-import com.air.commander.config.LoggingConfig;
+import com.air.commander.config.*;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
         ChatModelRoutingConfig.class,
         CommanderMetaConfig.class,
         LoggingConfig.class,
+        ChromaDbClientConfig.class,
 })
 @EnableDiscoveryClient
 @SpringBootApplication
