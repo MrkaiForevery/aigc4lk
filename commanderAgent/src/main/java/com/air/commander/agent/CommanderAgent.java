@@ -1,5 +1,6 @@
 package com.air.commander.agent;
 
+import com.air.api.feignClient.MemoryIdentityFeign;
 import com.air.commander.architecture.ArchitectureSelector;
 import com.air.commander.config.ChatClientConfiguration;
 import com.air.commander.entity.*;
@@ -47,6 +48,8 @@ public class CommanderAgent {
     /**模型客户端配置实例化句柄**/
     private final ChatClientConfiguration chatClientConfiguration;
 
+    /**身份共享记忆调用FeignClient**/
+    private final MemoryIdentityFeign memoryIdentityFeign;
 
     /**
      * 执行历史 todo 这里后期要改成外部存储，构建共享的chatMemery时需要

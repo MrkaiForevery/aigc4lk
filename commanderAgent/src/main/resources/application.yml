@@ -8,8 +8,8 @@ spring:
       - nacos:platform-commander-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:platform-model-routing-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:comander-resilience4j.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
-      - nacos:chat-model-api-keys.properties?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
-      - nacos:spring-ai-chroma-vectorstore-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:commander-chroma-vectorstore-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:spring-ai-mcp-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:staic-application-metrics.yaml?refreshEnabled=false&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
   cloud:

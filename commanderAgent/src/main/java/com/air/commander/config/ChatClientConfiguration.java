@@ -1,7 +1,5 @@
 package com.air.commander.config;
 
-import cn.hutool.core.util.ObjectUtil;
-import cn.hutool.core.util.StrUtil;
 import com.air.commander.model.ChatModelRouter;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
@@ -200,12 +198,9 @@ public class ChatClientConfiguration {
         }
         return chromaApi;
     }
+
     /**
      * todo 这里先暂时不用动态的EmbeddingModel，固定用dashscope类型的
-     * @param embeddingModel
-     * @return
-     */
-    /**
      * 创建 ChromaVectorStore Bean
      */
     @Bean

@@ -124,6 +124,17 @@
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
+        <!--############################## feign-client依赖 ###########################-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.air</groupId>
+            <artifactId>sharedMemoryServiceApi</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
     </dependencies>
 
     <build>

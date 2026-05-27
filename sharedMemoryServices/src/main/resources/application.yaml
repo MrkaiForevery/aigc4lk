@@ -3,8 +3,16 @@ server:
 spring:
   application:
     name: aigc4lk-shared-memory-service
+  # postgres 数据库连接
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aigc4lk_db
+    username: aigc4lk
+    password: 123456
+    driver-class-name: org.postgresql.Driver
   config:
     import:
+      - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:memory-chroma-vectorstore-config.yaml?refreshEnabled=true&group=MEMORY_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:staic-application-metrics.yaml?refreshEnabled=false&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
   cloud:
     nacos:
@@ -23,33 +31,23 @@ spring:
         username: aigc4lk
         password: 123456
         cluster-name: aigc4lk-shared-memory-service-cluster
-#  ai:
-#    # 这里设置占位的原因:DashScopeChatAutoConfiguration 在启动时，会尝试从 application.yml
-#    # 或 application.properties 等标准配置源中读取 spring.ai.dashscope.api-key 属性。
-#    # 即使你从 Nacos 导入了所有配置，这个自动配置类也依然会尝试从本地查找，如果找不到，就会启动失败。
-#    # 所以这里先会用一个default_key来让其正常启动，后面nacos配置读取完了以后，自然会覆盖，一个典型的配置加载顺序问题
-#    dashscope:
-#      api-key: ${DASHSCOPE_API_KEY:default_key}
-#    openai:
-#      api-key: ${DASHSCOPE_API_KEY:default_key}
-#    alibaba:
-#      a2a:
-#        nacos:
-#          # Spring AI Alibaba A2A 配置
-#          server-addr: 127.0.0.1:8848
-#          namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
-#          username: aigc4lk
-#          password: 123456
-#          registry:
-#            enabled: false
-#          discovery:
-#            enabled: true
-#    model:
-#      embedding: dashscope
+  ai:
+    openai:
+      api-key: ${DASHSCOPE_API_KEY:default_key}
+      embedding:
+        options:
+          model: text-embedding-ada-002
+    model:
+      embedding: openai
 
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
 
-logging:
-  level:
-    com.alibaba.nacos.client: DEBUG
-    com.alibaba.cloud.nacos.configdata: DEBUG
-    org.springframework.boot.context.config: DEBUG
+redisson:
+  single-server-config:
+    address: "redis://localhost:6379"
+
