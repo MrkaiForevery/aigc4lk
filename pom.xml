@@ -21,6 +21,7 @@
         <module>platformCommon</module>
         <module>commanderAgent</module>
         <module>cookingAgent</module>
+        <module>sharedMemoryServices</module>
     </modules>
 
     <properties>

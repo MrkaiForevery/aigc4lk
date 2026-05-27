@@ -13,7 +13,7 @@
     <artifactId>commanderAgent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>commanderAgent</name>
-    <description>commanderAgent</description>
+    <description>命令指挥中枢智能体</description>
 
     <properties>
         <java.version>17</java.version>
@@ -109,11 +109,6 @@
             <groupId>com.alibaba.nacos</groupId>
             <artifactId>nacos-client</artifactId>
             <version>${nacos-client.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.alibaba.nacos</groupId>
-            <artifactId>nacos-maintainer-client</artifactId>
-            <version>${nacos-client.version}</version> <!-- 强制升级到3.2.0 -->
         </dependency>
 
         <!-- Micrometer for metrics -->
