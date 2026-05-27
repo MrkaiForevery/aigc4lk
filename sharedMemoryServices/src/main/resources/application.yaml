@@ -1,0 +1,55 @@
+server:
+  port: 10086
+spring:
+  application:
+    name: aigc4lk-shared-memory-service
+  config:
+    import:
+      - nacos:staic-application-metrics.yaml?refreshEnabled=false&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+  cloud:
+    nacos:
+      # Nacos 服务发现配置
+      discovery:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        group: MEMORY_GROUP
+        username: aigc4lk
+        password: 123456
+      # Nacos 配置中心配置
+      config:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        group: MEMORY_GROUP
+        username: aigc4lk
+        password: 123456
+        cluster-name: aigc4lk-shared-memory-service-cluster
+#  ai:
+#    # 这里设置占位的原因:DashScopeChatAutoConfiguration 在启动时，会尝试从 application.yml
+#    # 或 application.properties 等标准配置源中读取 spring.ai.dashscope.api-key 属性。
+#    # 即使你从 Nacos 导入了所有配置，这个自动配置类也依然会尝试从本地查找，如果找不到，就会启动失败。
+#    # 所以这里先会用一个default_key来让其正常启动，后面nacos配置读取完了以后，自然会覆盖，一个典型的配置加载顺序问题
+#    dashscope:
+#      api-key: ${DASHSCOPE_API_KEY:default_key}
+#    openai:
+#      api-key: ${DASHSCOPE_API_KEY:default_key}
+#    alibaba:
+#      a2a:
+#        nacos:
+#          # Spring AI Alibaba A2A 配置
+#          server-addr: 127.0.0.1:8848
+#          namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+#          username: aigc4lk
+#          password: 123456
+#          registry:
+#            enabled: false
+#          discovery:
+#            enabled: true
+#    model:
+#      embedding: dashscope
+
+
+logging:
+  level:
+    com.alibaba.nacos.client: DEBUG
+    com.alibaba.cloud.nacos.configdata: DEBUG
+    org.springframework.boot.context.config: DEBUG
