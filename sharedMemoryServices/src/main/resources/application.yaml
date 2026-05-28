@@ -12,6 +12,8 @@ spring:
   config:
     import:
       - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:common--desensitize-enable.yaml?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:memory-general-enable.yaml?refreshEnabled=true&group=MEMORY_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:memory-chroma-vectorstore-config.yaml?refreshEnabled=true&group=MEMORY_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:staic-application-metrics.yaml?refreshEnabled=false&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
   cloud:
@@ -32,6 +34,8 @@ spring:
         password: 123456
         cluster-name: aigc4lk-shared-memory-service-cluster
   ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:default_key}
     openai:
       api-key: ${DASHSCOPE_API_KEY:default_key}
       embedding:
@@ -50,4 +54,3 @@ mybatis-plus:
 redisson:
   single-server-config:
     address: "redis://localhost:6379"
-
