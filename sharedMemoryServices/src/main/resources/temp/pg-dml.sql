@@ -133,3 +133,24 @@ COMMENT ON COLUMN memory_decision.selection_reason IS '选择原因';
 COMMENT ON COLUMN memory_decision.execution_time_ms IS '执行耗时(毫秒)';
 COMMENT ON COLUMN memory_decision.success IS '是否成功';
 COMMENT ON COLUMN memory_decision.created_at IS '创建时间';
+
+-- 冷热数据分离
+-- 归档表（结构与主表一致，但索引精简）
+CREATE TABLE memory_behavior_archive (
+   LIKE memory_behavior INCLUDING ALL
+);
+
+-- 归档表只需要 user_id 和 created_at 索引（偶尔按用户查询历史）
+CREATE INDEX idx_archive_user_time ON memory_behavior_archive(user_id, created_at DESC);
+
+
+-- 降级的索引表
+CREATE TABLE knowledge_index (
+                                 doc_id        VARCHAR(128) PRIMARY KEY,          -- Chroma 文档 ID
+                                 user_id       VARCHAR(64),
+                                 source        VARCHAR(32),
+                                 created_at    TIMESTAMP DEFAULT NOW(),
+                                 last_access   TIMESTAMP DEFAULT NOW(),
+                                 status        VARCHAR(16) DEFAULT 'active'       -- active / archived
+);
+CREATE INDEX idx_ki_status_access ON knowledge_index(status, last_access);

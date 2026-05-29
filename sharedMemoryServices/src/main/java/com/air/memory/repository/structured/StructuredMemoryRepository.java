@@ -8,6 +8,7 @@ import com.air.memory.entity.*;
 import com.air.memory.mapper.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.ibatis.annotations.Param;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -74,6 +75,14 @@ public class StructuredMemoryRepository {
 
     public void recordBehavior(BehaviorRecord record) {
         behaviorMapper.insert(record);
+    }
+
+    public int deleteOlderThan(LocalDateTime threshold){
+       return behaviorMapper.deleteOlderThan(threshold);
+    }
+
+    public int archiveToHistory( LocalDateTime threshold){
+        return behaviorMapper.archiveToHistory(threshold);
     }
 
     /**

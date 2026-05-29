@@ -1,12 +1,11 @@
 package com.air.memory.lifecycle;
 
 import com.air.memory.config.LifecycleConfig;
-import com.air.memory.mapper.BehaviorRecordMapper;
-import com.air.memory.repository.vectorized.KnowledgeRepository;
+import com.air.memory.service.BehaviorService;
+import com.air.memory.service.KnowledgeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -21,8 +20,8 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class MemoryLifecycleManager {
 
-    private final BehaviorRecordMapper behaviorMapper;
-    private final KnowledgeRepository knowledgeRepository;
+    private final BehaviorService behaviorService;
+    private final KnowledgeService knowledgeService;
     private final RedissonClient redissonClient;
 
     private final LifecycleConfig lifecycleConfig;
@@ -35,7 +34,7 @@ public class MemoryLifecycleManager {
         log.info("开始清理过期行为记忆...");
         try {
             LocalDateTime threshold = LocalDateTime.now().minusDays(90);
-            int deleted = behaviorMapper.deleteOlderThan(threshold);
+            int deleted = behaviorService.deleteOlderThanAsync(threshold).get();
             log.info("清理完成，删除 {} 条过期行为记录", deleted);
         } catch (Exception e) {
             log.error("清理过期行为记忆失败", e);
@@ -50,10 +49,10 @@ public class MemoryLifecycleManager {
         log.info("开始归档冷行为数据...");
         try {
             LocalDateTime threshold = LocalDateTime.now().minusMonths(3);
-            int archived = behaviorMapper.archiveToHistory(threshold);
+            int archived = behaviorService.archiveToHistoryAsync(threshold).get();
             if (archived > 0) {
                 // 归档成功后删除原表数据
-                behaviorMapper.deleteOlderThan(threshold);
+                behaviorService.deleteOlderThanAsync(threshold);
             }
             log.info("归档完成，处理 {} 条记录", archived);
         } catch (Exception e) {
@@ -69,10 +68,7 @@ public class MemoryLifecycleManager {
     public void degradeLowFrequencyKnowledge() {
         log.info("开始降级低频知识记忆...");
         try {
-            // 这里需要根据你的 Chroma 使用情况实现具体降级逻辑
-            // 例如：查询 metadata 中 last_access_time 早于 3 个月前的文档
-            // 将其从主集合移动到 archive 集合
-            int degraded = knowledgeRepository.degradeLowFrequency(3);
+            int degraded = knowledgeService.degradeLowFrequency(3);
             log.info("降级完成，处理 {} 条低频知识", degraded);
         } catch (Exception e) {
             log.error("降级低频知识失败", e);
@@ -82,9 +78,8 @@ public class MemoryLifecycleManager {
     /**
      * 手动触发清理（异步）
      */
-    @Async("ioExecutor")
     public void cleanupManually(int retentionDays) {
         LocalDateTime threshold = LocalDateTime.now().minusDays(retentionDays);
-        behaviorMapper.deleteOlderThan(threshold);
+        behaviorService.deleteOlderThanAsync(threshold);
     }
 }

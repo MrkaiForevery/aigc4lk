@@ -13,6 +13,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * 向量知识库操作服务
+ * 注意：因为Chroma 不支持事务，所以这里不能加事务注解
+ */
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -111,4 +116,7 @@ public class KnowledgeService {
     }
 
 
+    public int degradeLowFrequency(int months) {
+        return knowledgeRepository.degradeLowFrequency(months);
+    }
 }

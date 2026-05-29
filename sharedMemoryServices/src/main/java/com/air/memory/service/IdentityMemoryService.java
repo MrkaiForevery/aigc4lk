@@ -16,7 +16,6 @@ public class IdentityMemoryService {
 
     private final StructuredMemoryRepository structuredMemoryRepository;
 
-
     public IdentityMemory getIdentity(String userId) {
        return structuredMemoryRepository.getIdentity(userId);
     }

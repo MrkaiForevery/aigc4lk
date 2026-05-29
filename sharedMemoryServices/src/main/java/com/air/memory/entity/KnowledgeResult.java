@@ -14,5 +14,6 @@ import java.util.Map;
 public  class KnowledgeResult {
     private  String id;
     private  String content;
+    private double similarity;
     private  Map<String, Object> metadata;
 }

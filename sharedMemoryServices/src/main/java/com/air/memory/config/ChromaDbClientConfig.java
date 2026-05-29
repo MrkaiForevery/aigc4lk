@@ -12,7 +12,9 @@ public class ChromaDbClientConfig {
     private Client client = new Client();
     private String tenantName = "default_tenant";
     private String databaseName = "default_database";
-    private String collectionName = "default_collection";
+    private String knowledgeBaseCollection = "knowledge_base";
+    private String knowledgeArchiveCollection = "knowledge_archive";
+    private String modelName = "text-embedding-v2";
 
     @Data
     public static class Client {

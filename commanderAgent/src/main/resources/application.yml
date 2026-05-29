@@ -56,6 +56,8 @@ spring:
 
 logging:
   level:
+    com.alibaba.nacos.client.naming: WARN
+    com.alibaba.nacos.client.naming.failover: OFF
     com.alibaba.nacos.client: DEBUG
     com.alibaba.cloud.nacos.configdata: DEBUG
     org.springframework.boot.context.config: DEBUG

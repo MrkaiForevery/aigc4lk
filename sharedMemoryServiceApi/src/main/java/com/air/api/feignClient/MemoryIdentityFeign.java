@@ -5,8 +5,9 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
 @FeignClient(
-    name = "aigc4lk-shared-memory-service",
-    path = "/memory/identity"
+        name = "aigc4lk-shared-memory-service",
+        contextId = "memoryIdentityFeign",
+        path = "/memory/identity"
 )
 public interface MemoryIdentityFeign {
     @GetMapping("/{userId}")

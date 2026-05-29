@@ -1,7 +1,6 @@
 package com.air.memory;
 
-import com.air.memory.config.ChatModelApiKeyConfig;
-import com.air.memory.config.ChromaDbClientConfig;
+import com.air.memory.config.*;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -12,6 +11,9 @@ import org.springframework.scheduling.annotation.EnableAsync;
 @EnableConfigurationProperties({
         ChatModelApiKeyConfig.class,
         ChromaDbClientConfig.class,
+        LifecycleConfig.class,
+        DedupEnableConfig.class,
+        DesensitizeEnableConfig.class,
 })
 @EnableDiscoveryClient
 @SpringBootApplication

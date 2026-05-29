@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -27,14 +28,27 @@ public class BehaviorService {
      **/
     private final MemoryCleanerOrchestrator cleanerOrchestrator;
     /**
-     *记忆去重工具类
+     * 记忆去重工具类
      */
     private final MemoryDeduplicator memoryDeduplicator;
 
+    /**
+     * 带有session摘要信息的排序-同步查询
+     */
     public List<BehaviorRecord> getRecentBehavior(String userId, int limit) {
-        return structuredMemoryRepository.getRecentBehavior(userId, limit);
+        List<BehaviorRecord> records = structuredMemoryRepository.getRecentBehavior(userId, limit);
+        // 将摘要类型排在最前面
+        records.sort((a, b) -> {
+            if ("SESSION_SUMMARY".equals(a.getActionType())) return -1;
+            if ("SESSION_SUMMARY".equals(b.getActionType())) return 1;
+            return b.getCreatedAt().compareTo(a.getCreatedAt());
+        });
+        return records;
     }
 
+    /**
+     * 带有session摘要信息的排序-异步查询
+     */
     @Async("ioExecutor")
     public CompletableFuture<List<BehaviorRecord>> getRecentBehaviorAsync(String userId, int limit) {
         return CompletableFuture.completedFuture(this.getRecentBehavior(userId, limit));
@@ -114,7 +128,7 @@ public class BehaviorService {
     }
 
     /**
-     * 异步手动清理
+     * 异步手动清理(供管理接口调用）
      */
     @Transactional
     @Async("ioExecutor")
@@ -122,6 +136,17 @@ public class BehaviorService {
         return CompletableFuture.completedFuture(this.cleanupExpiredBehavior(retentionDays));
     }
 
+    @Transactional
+    @Async("ioExecutor")
+    public CompletableFuture<Integer> deleteOlderThanAsync(LocalDateTime threshold) {
+        return CompletableFuture.completedFuture(structuredMemoryRepository.deleteOlderThan(threshold));
+    }
+
+    @Transactional
+    @Async("ioExecutor")
+    public CompletableFuture<Integer> archiveToHistoryAsync(LocalDateTime threshold) {
+        return CompletableFuture.completedFuture(structuredMemoryRepository.archiveToHistory(threshold));
+    }
 
     private BehaviorRecord buildBehaviorRecord(String userId, String sessionId, String actionType, CleanedMemory cleaned) {
         String metadataJson = JSONUtil.toJsonStr(Map.of(
