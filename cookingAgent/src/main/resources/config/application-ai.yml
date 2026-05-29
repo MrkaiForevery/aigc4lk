@@ -1,7 +1,7 @@
 spring:
   ai:
     dashscope:
-      api-key: sk-c996bb14c60c428fb35e1f6b3741cd8e
+      api-key: xxxx
       chat:
         options:
           model: deepseek-v3.2
