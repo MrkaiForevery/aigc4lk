@@ -1,5 +1,7 @@
 package com.air.memory.repository.vectorized;
 
+import cn.hutool.core.bean.BeanUtil;
+import com.air.api.dto.KnowledgeResultDTO;
 import com.air.memory.config.ChromaDbClientConfig;
 import com.air.memory.entity.KnowledgeIndex;
 import com.air.memory.entity.KnowledgeResult;
@@ -68,7 +70,7 @@ public class KnowledgeRepository {
     /**
      * 同步搜索知识（保留，给不需要异步的场景使用）
      */
-    public List<KnowledgeResult> search(String query, int limit) {
+    public List<KnowledgeResultDTO> search(String query, int limit) {
         SearchRequest searchRequest = SearchRequest.builder()
                 .query(query)
                 .topK(limit)
@@ -94,7 +96,8 @@ public class KnowledgeRepository {
                     doc.getMetadata()
             ));
         }
-        return knowledgeResults;
+        List<KnowledgeResultDTO> knowledgeResultDTOS = BeanUtil.copyToList(knowledgeResults, KnowledgeResultDTO.class);
+        return knowledgeResultDTOS;
     }
 
     /**

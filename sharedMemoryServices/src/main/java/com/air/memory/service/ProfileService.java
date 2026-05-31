@@ -1,5 +1,6 @@
 package com.air.memory.service;
 
+import com.air.api.dto.ProfileMemoryDTO;
 import com.air.memory.cleaner.MemoryCleanerOrchestrator;
 import com.air.memory.entity.ProfileMemory;
 import com.air.memory.repository.structured.StructuredMemoryRepository;
@@ -22,22 +23,22 @@ public class ProfileService {
      **/
     private final MemoryCleanerOrchestrator cleanerOrchestrator;
 
-    public ProfileMemory getProfile(String userId) {
+    public ProfileMemoryDTO getProfile(String userId) {
         return structuredMemoryRepository.getProfile(userId);
     }
 
     @Async("ioExecutor")
-    public CompletableFuture<ProfileMemory> getProfileAsync(String userId) {
+    public CompletableFuture<ProfileMemoryDTO> getProfileAsync(String userId) {
         return CompletableFuture.completedFuture(this.getProfile(userId));
     }
 
-    public void updateProfile(ProfileMemory profile) {
+    public void updateProfile(ProfileMemoryDTO profile) {
         structuredMemoryRepository.updateProfile(profile);
     }
 
     @Async("lightExecutor")
     @Transactional
-    public CompletableFuture<Void> updateProfileAsync(ProfileMemory profile) {
+    public CompletableFuture<Void> updateProfileAsync(ProfileMemoryDTO profile) {
         this.updateProfile(profile);
         return CompletableFuture.completedFuture(null);
     }
@@ -53,9 +54,9 @@ public class ProfileService {
                 .thenAccept(cleaned -> {
                     if (cleaned.isValid() && cleaned.getProfileTags() != null
                             && !cleaned.getProfileTags().isEmpty()) {
-                        ProfileMemory profile = getProfile(userId);
+                        ProfileMemoryDTO profile = getProfile(userId);
                         if (profile == null) {
-                            profile = ProfileMemory.builder()
+                            profile = ProfileMemoryDTO.builder()
                                     .userId(userId)
                                     .topicsOfInterest("[]")
                                     .build();

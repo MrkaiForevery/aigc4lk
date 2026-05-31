@@ -1,7 +1,0 @@
-spring:
-  ai:
-    dashscope:
-      api-key: xxxx
-      chat:
-        options:
-          model: deepseek-v3.2

@@ -1,6 +1,8 @@
 package com.air.memory.service;
 
 import cn.hutool.json.JSONUtil;
+import com.air.api.dto.KnowledgeResultDTO;
+import com.air.api.dto.ProfileMemoryDTO;
 import com.air.memory.entity.BehaviorRecord;
 import com.air.memory.entity.KnowledgeResult;
 import com.air.memory.entity.MemoryNode;
@@ -16,6 +18,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,11 +43,11 @@ public class MemoryManagerService {
      * 获取用户所有相关记忆（已排序）
      * 用于 Commander 构建增强上下文
      */
-    public List<MemoryNode> getPrioritizedMemories(String userId, String query, int limit) {
+    public List<MemoryNode> getPrioritizedMemories(String userId, Map<String, ? extends Serializable> query, int limit) {
         List<MemoryNode> allMemories = new ArrayList<>();
 
         // 1. 加载画像记忆
-        ProfileMemory profile =profileService.getProfile(userId);
+        ProfileMemoryDTO profile = profileService.getProfile(userId);
         if (profile != null) {
             allMemories.add(MemoryNode.builder()
                     .memoryType("PROFILE")
@@ -64,7 +67,7 @@ public class MemoryManagerService {
                 .build()));
 
         // 3. 加载相关长期知识
-        List<KnowledgeResult> knowledge = knowledgeService.search(query, 5);
+        List<KnowledgeResultDTO> knowledge = knowledgeService.search(query);
         knowledge.forEach(k -> allMemories.add(MemoryNode.builder()
                 .memoryType("KNOWLEDGE")
                 .content(k.getContent())
@@ -75,7 +78,7 @@ public class MemoryManagerService {
         return prioritySorter.sortAndLimit(allMemories, limit);
     }
 
-    private String buildProfileContent(ProfileMemory profile) {
+    private String buildProfileContent(ProfileMemoryDTO profile) {
         return String.format("用户偏好模型: %s, 技术等级: %s, 兴趣领域: %s",
                 profile.getPreferredModel(),
                 profile.getTechnicalLevel(),
@@ -84,8 +87,9 @@ public class MemoryManagerService {
 
     /**
      * 同步生成对话摘要
+     *
      * @param sessionId 会话ID
-     * @param userId 用户ID
+     * @param userId    用户ID
      * @return 摘要内容
      */
     public String summarizeSession(String sessionId, String userId) {
@@ -99,7 +103,7 @@ public class MemoryManagerService {
         String fullText = String.join("\n", messages);
         String promptText = String.format("""
                 请用100字以内总结以下对话的核心内容，提取关键信息和结论：
-
+                
                 对话内容：
                 %s
                 """, fullText);

@@ -1,5 +1,6 @@
 package com.air.memory.service;
 
+import com.air.api.dto.PreferenceMemoryDTO;
 import com.air.memory.entity.PreferenceMemory;
 import com.air.memory.repository.structured.StructuredMemoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,12 +18,12 @@ public class PreferenceService {
 
     private final StructuredMemoryRepository structuredMemoryRepository;
 
-    public PreferenceMemory getPreference(String userId) {
+    public PreferenceMemoryDTO getPreference(String userId) {
         return structuredMemoryRepository.getPreference(userId);
     }
 
     @Async("ioExecutor")
-    public CompletableFuture<PreferenceMemory> getPreferenceAsync(String userId) {
+    public CompletableFuture<PreferenceMemoryDTO> getPreferenceAsync(String userId) {
         return CompletableFuture.completedFuture(this.getPreference(userId));
     }
 

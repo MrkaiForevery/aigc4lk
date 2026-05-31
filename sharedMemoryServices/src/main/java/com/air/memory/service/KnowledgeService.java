@@ -1,5 +1,6 @@
 package com.air.memory.service;
 
+import com.air.api.dto.KnowledgeResultDTO;
 import com.air.memory.cleaner.MemoryCleanerOrchestrator;
 import com.air.memory.deduplicator.MemoryDeduplicator;
 import com.air.memory.entity.KnowledgeResult;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -102,16 +104,16 @@ public class KnowledgeService {
     /**
      * 同步搜索知识
      */
-    public List<KnowledgeResult> search(String query, int limit) {
-        return knowledgeRepository.search(query, limit);
+    public List<KnowledgeResultDTO> search(Map<String, ? extends Serializable> query) {
+        return knowledgeRepository.search(query.get("queryString").toString(), Integer.parseInt(query.get("limit").toString()));
     }
 
     /**
      * 异步搜索知识
      */
     @Async("ioExecutor")
-    public CompletableFuture<List<KnowledgeResult>> searchAsync(String query, int limit) {
-        List<KnowledgeResult> results = this.search(query, limit);
+    public CompletableFuture<List<KnowledgeResultDTO>> searchAsync(Map<String, ? extends Serializable> query) {
+        List<KnowledgeResultDTO> results = this.search(query);
         return CompletableFuture.completedFuture(results);
     }
 

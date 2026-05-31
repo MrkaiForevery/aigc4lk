@@ -12,9 +12,11 @@ import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
@@ -30,11 +32,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class NacosA2ARouter implements A2ARouter {
     
     // ==================== Spring AI Alibaba 原生组件 ====================
-    @Resource
-    private AgentCardProvider agentCardProvider;  // 原生Agent发现接口
+    private final AgentCardProvider agentCardProvider;
+    private final RestClient.Builder restClientBuilder;
     
     // ==================== 配置 ====================
     @Value("${a2a.timeout-seconds:30}")

@@ -10,10 +10,10 @@
     </parent>
 
     <groupId>com.air</groupId>
-    <artifactId>cookingAgent</artifactId>
+    <artifactId>documentAgent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>cookingAgent</name>
-    <description>cookingAgent</description>
+    <name>documentAgent</name>
+    <description>documentAgent</description>
 
     <properties>
         <java.version>17</java.version>
@@ -47,20 +47,6 @@
             <artifactId>spring-ai-alibaba-starter-a2a-nacos</artifactId>
         </dependency>
 
-        <!--############################## spring-ai-vector ###########################-->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-vector-store-chroma</artifactId>
-        </dependency>
-        <!--        <dependency>-->
-        <!--            <groupId>org.springframework.ai</groupId>-->
-        <!--            <artifactId>spring-ai-starter-model-openai</artifactId>-->
-        <!--        </dependency>-->
-        <!--        <dependency>-->
-        <!--            <groupId>org.springframework.ai</groupId>-->
-        <!--            <artifactId>spring-ai-pinecone-store</artifactId>-->
-        <!--        </dependency>-->
-
         <!--############################## spring-ai-mcp ###########################-->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -82,11 +68,27 @@
             <artifactId>nacos-client</artifactId>
             <version>3.2.0</version>
         </dependency>
+        <!-- OpenFeign -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
 
         <!--############################## 平台common依赖 ###########################-->
         <dependency>
             <groupId>com.air</groupId>
             <artifactId>platformCommon</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
+        <!--############################## feign-client依赖 ###########################-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.air</groupId>
+            <artifactId>sharedMemoryServiceApi</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
 

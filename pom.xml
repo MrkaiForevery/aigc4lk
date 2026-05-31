@@ -20,8 +20,8 @@
     <modules>
         <module>platformCommon</module>
         <module>commanderAgent</module>
-        <module>cookingAgent</module>
         <module>sharedMemoryServices</module>
+        <module>documentAgent</module>
     </modules>
 
     <properties>

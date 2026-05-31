@@ -7,7 +7,12 @@ import com.air.commander.entity.*;
 import com.air.commander.intent.IntentClassifier;
 import com.air.commander.model.ChatModelRouter;
 import com.air.platform.common.a2a.channel.CommanderChannel;
+import com.air.platform.common.a2a.enums.A2AMessageType;
+import com.air.platform.common.a2a.protocol.A2AMessage;
+import com.air.platform.common.a2a.protocol.A2AResponse;
+import com.air.platform.common.a2a.router.NacosA2ARouter;
 import com.air.platform.common.tranfer.CommanderResponse;
+import io.a2a.spec.A2AServerException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +55,9 @@ public class CommanderAgent {
 
     /**身份共享记忆调用FeignClient**/
     private final MemoryIdentityFeign memoryIdentityFeign;
+
+    /**注入平台自定义的a2aRouter**/
+    private final NacosA2ARouter a2aRouter;
 
     /**
      * 执行历史 todo 这里后期要改成外部存储，构建共享的chatMemery时需要
@@ -272,6 +280,16 @@ public class CommanderAgent {
             IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
             CommanderChannel.ArchitectureSelection architecture = architectureSelector.selectArchitecture(intent);
             ModelSelection model = chatModelRouter.selectModel(intent, architecture);
+
+            // ✅ 新增：根据场景决定是否委托给子 Agent
+            if ("DOCUMENT_GENERATION".equals(intent.getScenario())) {
+                return executeDocumentGenerationStream(request, intent, model);
+            }
+
+//            if ("MARKET_ANALYSIS".equals(intent.getScenario())) {
+//                return executeMarketAnalysisStream(request, intent, model);
+//            }
+
             // 动态获取模型
             ChatModel selectedModel = getOrCreateChatModel(model);
             ChatClient client = ChatClient.builder(selectedModel).build();
@@ -300,7 +318,16 @@ public class CommanderAgent {
     private Map<String, Object> executeTask(
             Map<String, Object> input,
             CommanderChannel.ArchitectureSelection architecture,
-            ModelSelection model) {
+            ModelSelection model) throws A2AServerException {
+        String scenario = (String) input.get("scenario");  // 来自意图识别
+
+        // ✅ 根据场景决定是否委托给子 Agent
+        if ("DOCUMENT_GENERATION".equals(scenario)) {
+            return executeDocumentGeneration(input, model);    // 跳转 DocumentAgent
+        }
+//        if ("MARKET_ANALYSIS".equals(scenario)) {
+//            return executeMarketAnalysis(input, model);        // 跳转 AnalysisAgent
+//        }
 
         // 根据架构类型执行不同的逻辑
         return switch (architecture.getArchitectureType()) {
@@ -618,6 +645,8 @@ public class CommanderAgent {
         }
     }
 
+
+
     /**
      * 根据 ModelSelection 动态创建 ChatModel
      */
@@ -638,5 +667,78 @@ public class CommanderAgent {
         modelCache.put(modelId, chatModel);
 
         return chatModel;
+    }
+
+    /**
+     * 委托给 DocumentAgent 的同步返回
+     */
+    private Map<String, Object> executeDocumentGeneration(Map<String, Object> input, ModelSelection model) throws A2AServerException {
+        String topic = (String) input.get("query");
+        String userId = (String) input.get("user_id");
+        String sessionId = (String) input.get("session_id");
+
+        // 构建 A2A 消息
+        A2AMessage taskMessage = A2AMessage.builder()
+                .senderAgentId("commander-agent")
+                .receiverAgentId("document-agent")
+                .messageType(A2AMessageType.TASK_DELEGATION)
+                .payload(Map.of(
+                        "taskId", UUID.randomUUID().toString(),
+                        "taskType", "GENERATE_DOCUMENT",
+                        "payload", Map.of(
+                                "topic", topic,
+                                "docType", "技术报告",
+                                "userId", userId,
+                                "sessionId", sessionId,
+                                "recommendedModel", model.getModelId()  // commander传给子Agent的建议模型，子agent一般不会采纳
+                        )
+                ))
+                .build();
+        // 2. 构建发送参数
+        A2AResponse a2AResponse = a2aRouter.routeMessage(taskMessage);
+
+        // 3. 返回结果
+        if (A2AResponse.ResponseStatus.SUCCESS.equals(a2AResponse.getStatus())) {
+            return (Map<String, Object>) a2AResponse.getPayload();
+        } else {
+            return Map.of("success", false, "error", a2AResponse.getErrorMessage());
+        }
+    }
+
+    /**
+     * 委托给 DocumentAgent 的流式返回
+     */
+    private Flux<String> executeDocumentGenerationStream(CommanderRequest request, IntentAnalysis intent, ModelSelection model) {
+        String topic = request.getUserInput();
+        String userId = request.getContext() != null ? request.getContext().get("userId").toString() : null;
+        String sessionId = request.getSessionId();
+
+        A2AMessage taskMessage = A2AMessage.builder()
+                .senderAgentId("commander-agent")
+                .receiverAgentId("document-agent")
+                .messageType(A2AMessageType.TASK_DELEGATION)
+                .payload(Map.of(
+                        "taskId", UUID.randomUUID().toString(),
+                        "taskType", "GENERATE_DOCUMENT",
+                        "payload", Map.of(
+                                "topic", topic,
+                                "docType", "技术报告",
+                                "userId", userId,
+                                "sessionId", sessionId,
+                                "recommendedModel", model.getModelId()  // commander传给子Agent的建议模型，子agent一般不会采纳
+                        )
+                ))
+                .build();
+
+        try {
+            A2AResponse response = a2aRouter.routeMessage(taskMessage);
+            Map<String, Object> result = (Map<String, Object>) response.getPayload();
+            String document = (String) result.get("document");
+
+            // 将子 Agent 返回的文档拆成字符流（简单模拟流式输出）
+            return Flux.fromArray(document.split("(?<=\\G.{1})"));  // 逐字符输出
+        } catch (Exception e) {
+            return Flux.just("❌ 文档生成失败: " + e.getMessage());
+        }
     }
 }

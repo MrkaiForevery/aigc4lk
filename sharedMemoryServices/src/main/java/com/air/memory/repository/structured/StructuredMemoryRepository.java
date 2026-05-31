@@ -2,6 +2,8 @@ package com.air.memory.repository.structured;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.air.api.dto.IdentityMemoryDTO;
+import com.air.api.dto.PreferenceMemoryDTO;
+import com.air.api.dto.ProfileMemoryDTO;
 import com.air.memory.cleaner.MemoryCleanerOrchestrator;
 import com.air.memory.deduplicator.MemoryDeduplicator;
 import com.air.memory.entity.*;
@@ -38,7 +40,7 @@ public class StructuredMemoryRepository {
     private final MemoryCleanerOrchestrator cleanerOrchestrator;
 
     /**
-     *记忆去重工具类
+     * 记忆去重工具类
      */
     private final MemoryDeduplicator memoryDeduplicator;
 
@@ -60,12 +62,17 @@ public class StructuredMemoryRepository {
     }
 
     // ==================== 画像记忆 ====================
-    public ProfileMemory getProfile(String userId) {
-        return profileMapper.selectById(userId);
+    public ProfileMemoryDTO getProfile(String userId) {
+        ProfileMemory profileMemory = profileMapper.selectById(userId);
+        ProfileMemoryDTO profileMemoryDTO = new ProfileMemoryDTO();
+        BeanUtil.copyProperties(profileMemory, profileMemoryDTO);
+        return profileMemoryDTO;
     }
 
-    public void updateProfile(ProfileMemory profile) {
-        profileMapper.insertOrUpdate(profile);
+    public void updateProfile(ProfileMemoryDTO profile) {
+        ProfileMemory profileMemory = new ProfileMemory();
+        BeanUtil.copyProperties(profile, profileMemory);
+        profileMapper.insertOrUpdate(profileMemory);
     }
 
     // ==================== 行为记忆 ====================
@@ -77,11 +84,11 @@ public class StructuredMemoryRepository {
         behaviorMapper.insert(record);
     }
 
-    public int deleteOlderThan(LocalDateTime threshold){
-       return behaviorMapper.deleteOlderThan(threshold);
+    public int deleteOlderThan(LocalDateTime threshold) {
+        return behaviorMapper.deleteOlderThan(threshold);
     }
 
-    public int archiveToHistory( LocalDateTime threshold){
+    public int archiveToHistory(LocalDateTime threshold) {
         return behaviorMapper.archiveToHistory(threshold);
     }
 
@@ -94,8 +101,11 @@ public class StructuredMemoryRepository {
     }
 
     // ==================== 偏好记忆 ====================
-    public PreferenceMemory getPreference(String userId) {
-        return preferenceMapper.selectById(userId);
+    public PreferenceMemoryDTO getPreference(String userId) {
+        PreferenceMemoryDTO preferenceMemoryDTO = new PreferenceMemoryDTO();
+        PreferenceMemory preferenceMemory = preferenceMapper.selectById(userId);
+        BeanUtil.copyProperties(preferenceMemory, preferenceMemoryDTO);
+        return preferenceMemoryDTO;
     }
 
     public void updatePreference(PreferenceMemory preference) {
