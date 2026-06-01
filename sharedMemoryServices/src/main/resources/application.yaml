@@ -22,7 +22,6 @@ spring:
       discovery:
         server-addr: 127.0.0.1:8848
         namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
-        group: MEMORY_GROUP
         username: aigc4lk
         password: 123456
       # Nacos 配置中心配置

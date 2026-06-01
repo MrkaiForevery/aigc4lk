@@ -33,6 +33,7 @@ public class DynamicGraphBuilder {
 
 
     // ==================== 对外api ====================
+
     /**
      * 根据模板 ID 动态构建 StateGraph
      */
@@ -40,10 +41,10 @@ public class DynamicGraphBuilder {
         GraphTemplate template = findTemplate(templateId);
         log.info("Building graph from template: {} (type: {})", templateId, template.getType());
         return switch (template.getType()) {
-            case "SEQUENTIAL"   -> buildSequentialGraph(template);
-            case "PARALLEL"     -> buildParallelGraph(template);
+            case "SEQUENTIAL" -> buildSequentialGraph(template);
+            case "PARALLEL" -> buildParallelGraph(template);
             case "A2A_DELEGATE" -> buildA2ADelegateGraph(template);
-            case "CONDITIONAL"  -> buildConditionalGraph(template);
+            case "CONDITIONAL" -> buildConditionalGraph(template);
             default -> throw new UnsupportedOperationException("Unknown type: " + template.getType());
         };
     }
@@ -59,7 +60,6 @@ public class DynamicGraphBuilder {
     }
 
     // ==================== 构建方法 ====================
-
     private StateGraph buildSequentialGraph(GraphTemplate template) throws GraphStateException {
         KeyStrategyFactory keyStrategy = buildKeyStrategy(template);
         StateGraph graph = new StateGraph(template.getTemplateId(), keyStrategy);
@@ -102,12 +102,20 @@ public class DynamicGraphBuilder {
         );
         StateGraph graph = new StateGraph(template.getTemplateId(), keyStrategy);
         graph.addNode("a2a_delegate", node_async(state -> {
+            // 从 State 中获取 threadId
+            String threadId = state.value("thread_id").orElse("default").toString();
+
             Map<String, Object> payload = resolvePayload(template.getPayloadMapping(), state);
+
             A2AResponse response = a2aRouter.routeMessage(A2AMessage.builder()
                     .senderAgentId("commander-agent")
                     .receiverAgentId(template.getTargetAgent())
                     .messageType(A2AMessageType.TASK_DELEGATION)
-                    .payload(Map.of("taskType", template.getTaskType(), "payload", payload))
+                    .payload(Map.of(
+                            "taskType", template.getTaskType(),
+                            "payload", payload,
+                            "threadId", threadId)
+                    )
                     .build());
             return response.isSuccess() ? Map.of("a2a_result", response.getPayload())
                     : Map.of("error", response.getErrorMessage());
@@ -163,15 +171,15 @@ public class DynamicGraphBuilder {
                                     String inputNodeId, String outputNodeId, String nodePrefix) throws GraphStateException {
         GraphTemplate template = findTemplate(templateId);
         switch (template.getType()) {
-            case "SEQUENTIAL"   -> addSequentialToGraph(graph, template, inputNodeId, outputNodeId, nodePrefix);
-            case "PARALLEL"     -> addParallelToGraph(graph, template, inputNodeId, outputNodeId, nodePrefix);
+            case "SEQUENTIAL" -> addSequentialToGraph(graph, template, inputNodeId, outputNodeId, nodePrefix);
+            case "PARALLEL" -> addParallelToGraph(graph, template, inputNodeId, outputNodeId, nodePrefix);
             case "A2A_DELEGATE" -> {
                 String nodeId = nodePrefix + "a2a";
                 graph.addNode(nodeId, node_async(state -> executeA2ANodeFromTemplate(template, state)));
                 graph.addEdge(inputNodeId, nodeId);
                 graph.addEdge(nodeId, outputNodeId);
             }
-            case "CONDITIONAL"  -> {
+            case "CONDITIONAL" -> {
                 String condNodeId = nodePrefix + "cond_check";
                 graph.addNode(condNodeId, node_async(state -> Map.of()));
                 graph.addEdge(inputNodeId, condNodeId);
@@ -241,9 +249,9 @@ public class DynamicGraphBuilder {
 
     private Map<String, Object> executeNode(NodeConfig node, OverAllState state) {
         return switch (node.getType()) {
-            case "LLM_CALL"     -> executeLLMNode(node, state);
+            case "LLM_CALL" -> executeLLMNode(node, state);
             case "A2A_DELEGATE" -> executeA2ANode(node, state);
-            default             -> Map.of(node.getOutputKey(), "Unknown node type: " + node.getType());
+            default -> Map.of(node.getOutputKey(), "Unknown node type: " + node.getType());
         };
     }
 

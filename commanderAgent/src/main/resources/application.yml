@@ -19,7 +19,6 @@ spring:
       discovery:
         server-addr: 127.0.0.1:8848
         namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
-        group: COMMANDER_GROUP
         username: aigc4lk
         password: 123456
       # Nacos 配置中心配置
@@ -62,3 +61,13 @@ logging:
     com.alibaba.nacos.client: DEBUG
     com.alibaba.cloud.nacos.configdata: DEBUG
     org.springframework.boot.context.config: DEBUG
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs           # OpenAPI JSON 文档路径
+  swagger-ui:
+    path: /swagger-ui.html       # Swagger UI 页面路径
+  info:
+    title: Commander API
+    description: 企业级智能编排平台 - Commander 服务接口
+    version: 1.0.0

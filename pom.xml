@@ -21,6 +21,7 @@
         <module>platformCommon</module>
         <module>commanderAgent</module>
         <module>sharedMemoryServices</module>
+        <module>sharedMemoryServiceApi</module>
         <module>documentAgent</module>
     </modules>
 
@@ -104,4 +105,5 @@
             <optional>true</optional>
         </dependency>
     </dependencies>
+
 </project>

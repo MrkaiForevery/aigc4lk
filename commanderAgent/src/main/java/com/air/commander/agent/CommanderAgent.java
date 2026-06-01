@@ -19,6 +19,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,13 +41,20 @@ public class CommanderAgent {
     @Retry(name = "commander-retry")
     public CommanderResponse execute(CommanderRequest request) {
         String executionId = UUID.randomUUID().toString();
+        // ✅ 生成隔离标识
+        String userId = Optional.ofNullable(request.getContext())
+                .map(ctx -> (String) ctx.get("userId"))
+                .orElse("anonymous");
+        String sessionId = request.getSessionId() != null ? request.getSessionId() : "default";
+        String threadId = userId + "::" + sessionId;  // 关键：唯一隔离标识
+
         Instant startTime = Instant.now();
 
         log.info("🚀 [{}] Commander execution started", executionId);
 
         try {
             // 1. 意图识别
-            IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
+            IntentAnalysis intent = intentClassifier.analyzeIntent( request.getUserInput(),sessionId,userId);
             log.info("🎯 [{}] Intent: scenario={}, complexity={}, modality={}",
                     executionId, intent.getScenario(), intent.getComplexity(), intent.getModality());
 
@@ -62,6 +70,9 @@ public class CommanderAgent {
             executionInput.put("model_id", model.getModelId());
             executionInput.put("complexity", intent.getComplexity());
             executionInput.put("template_id", templateId);
+            executionInput.put("thread_id", threadId); //重点-核心会话隔离标识
+            executionInput.put("user_id", userId);
+            executionInput.put("session_id", sessionId);
 
             // 5. 编译并执行 Graph
             Map<String, Object> result = dynamicGraphBuilder.compileAndExecute(templateId, executionInput);
@@ -129,7 +140,11 @@ public class CommanderAgent {
             try {
                 // 1. 意图识别
                 pushProgress(sink, executionId, "INTENT_ANALYSIS");
-                IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
+                IntentAnalysis intent = intentClassifier.analyzeIntent(
+                        request.getUserInput(),
+                        request.getSessionId(),
+                        request.getContext() != null ? request.getContext().get("userId").toString() : null
+                );
 
                 // 2. 模板选择
                 pushProgress(sink, executionId, "TEMPLATE_SELECTION");
@@ -168,7 +183,11 @@ public class CommanderAgent {
         String executionId = UUID.randomUUID().toString();
 
         return Mono.fromCallable(() -> {
-                    IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
+                    IntentAnalysis intent = intentClassifier.analyzeIntent(
+                            request.getUserInput(),
+                            request.getSessionId(),
+                            request.getContext() != null ? request.getContext().get("userId").toString() : null
+                    );
                     String templateId = templateSelector.selectTemplate(intent);
                     ModelSelection model = chatModelRouter.selectModel(intent, null);
 

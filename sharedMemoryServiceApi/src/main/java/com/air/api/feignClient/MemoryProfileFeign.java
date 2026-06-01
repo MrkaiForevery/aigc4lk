@@ -10,6 +10,6 @@ import org.springframework.web.bind.annotation.*;
         path = "/memory/profile"
 )
 public interface MemoryProfileFeign {
-    @GetMapping("/{userId}")
+    @GetMapping("/get/{userId}")
     ProfileMemoryDTO getProfile(@PathVariable String userId);
 }

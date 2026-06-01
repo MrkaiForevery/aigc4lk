@@ -14,7 +14,7 @@ public class IdentityController implements MemoryIdentityFeign {
 
     private final IdentityMemoryService identityMemoryService;
 
-    @GetMapping("/{userId}")
+    @GetMapping("/get/{userId}")
     public IdentityMemoryDTO get(@PathVariable String userId) {
         IdentityMemoryDTO memoryDTO = IdentityMemoryDTO.builder().build();
         BeanUtil.copyProperties(identityMemoryService.getIdentity(userId),memoryDTO);

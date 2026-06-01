@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
         path = "/memory/identity"
 )
 public interface MemoryIdentityFeign {
-    @GetMapping("/{userId}")
+    @GetMapping("/get/{userId}")
     IdentityMemoryDTO get(@PathVariable String userId);
 
     @PostMapping
