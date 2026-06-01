@@ -53,7 +53,7 @@ public class DocumentAgentTools {
 
     @Tool(description = "从知识库中搜索与主题相关的内容，返回相关文档列表")
     public List<KnowledgeResultDTO> searchKnowledge(@ToolParam(description = "搜索主题") String topic) {
-        return memoryKnowledgeFeign.searchKnowledge(Map.of("query", topic, "limit", 5));
+        return memoryKnowledgeFeign.searchKnowledge(Map.of("queryString", topic, "limit", 5));
     }
 
 

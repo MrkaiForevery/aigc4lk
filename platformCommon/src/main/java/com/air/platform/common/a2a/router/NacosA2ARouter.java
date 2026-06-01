@@ -1,5 +1,6 @@
 package com.air.platform.common.a2a.router;
 
+import cn.hutool.core.lang.UUID;
 import com.air.platform.common.a2a.protocol.A2AMessage;
 import com.air.platform.common.a2a.protocol.A2AResponse;
 import com.air.platform.common.multimodal.vo.AgentInstance;
@@ -11,18 +12,26 @@ import com.alibaba.cloud.ai.graph.agent.a2a.A2aRemoteAgent;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardProvider;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 
+import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Nacos 3.2 原生A2A路由器实现
@@ -39,6 +48,7 @@ public class NacosA2ARouter implements A2ARouter {
     // ==================== Spring AI Alibaba 原生组件 ====================
     private final AgentCardProvider agentCardProvider;
     private final RestClient.Builder restClientBuilder;
+    private final ObjectMapper objectMapper;
 
     // ==================== 配置 ====================
     @Value("${a2a.timeout-seconds:30}")
@@ -71,35 +81,95 @@ public class NacosA2ARouter implements A2ARouter {
                         "Agent not found: " + targetAgentId);
             }
 
-            // 获取或创建远程Agent代理
-            A2aRemoteAgent remoteAgent = remoteAgentCache.computeIfAbsent(targetAgentId,
-                    id -> A2aRemoteAgent.builder()
-                            .name(id)
-                            .agentCardProvider(agentCardProvider)
-                            .description("Remote proxy for " + id)
-                            .build());
+            String endpoint = agentCard.url(); // 子Agent暴露的A2A端点
 
-            // 从自定义消息中提取 threadId
+            // 从自定义消息中提取 threadId 和业务参数
             String threadId = extractThreadId(message);
+            Map<String, Object> originalPayload = (Map<String, Object>) message.getPayload();
 
-            // 构建 RunnableConfig 并设置隔离标识 threadId
-            RunnableConfig config = RunnableConfig.builder()
-                    .threadId(threadId)
-                    .build();
-            // 使用带 RunnableConfig 的 invoke 方法
-            Optional<OverAllState> result = remoteAgent.invoke(message.getPayload().toString(), config);
+            // 构建标准JSON-RPC请求体
+            String requestBody = buildStandardA2ARequest(originalPayload, threadId);
 
-            if (result.isPresent()) {
-                return A2AResponse.success(message.getMessageId(), result.get().data());
-            } else {
-                return A2AResponse.failure(message.getMessageId(), "A2A-009", "No result from remote agent");
-            }
+            // 发送HTTP请求
+            String responseStr = restClientBuilder.build()
+                    .post()
+                    .uri(endpoint)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(String.class);
+
+            // 解析响应（根据实际返回格式调整）
+            return parseResponse(responseStr, message.getMessageId());
 
         } catch (Exception e) {
             log.error("Failed to route message to: {}", targetAgentId, e);
             return A2AResponse.failure(message.getMessageId(), "A2A-002", e.getMessage());
         }
     }
+
+    private A2AResponse parseResponse(String responseStr, String messageId) {
+        try {
+            JsonNode root = objectMapper.readTree(responseStr);
+            if (root.has("result")) {
+                return A2AResponse.success(messageId, root.get("result"));
+            } else if (root.has("error")) {
+                return A2AResponse.failure(messageId, "A2A-009", root.get("error").toString());
+            }
+            // 如果直接返回了流式结果（SSE），这里可以简化处理
+            return A2AResponse.success(messageId, responseStr);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse A2A response, returning raw string", e);
+            return A2AResponse.success(messageId, responseStr);
+        }
+
+    }
+
+    private String buildStandardA2ARequest(Map<String, Object> originalPayload, String threadId) {
+        // 将业务参数格式化为用户消息文本
+        String userMessage = formatUserMessage(originalPayload);
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("method", "message/stream");
+        request.put("id", UUID.randomUUID().toString());
+        request.put("jsonrpc", "2.0");
+        request.put("params", Map.of(
+                "metadata", Map.of("threadId", threadId),
+                "message", Map.of(
+                        "role", "user",
+                        "kind", "message",
+                        "parts", List.of(Map.of("text", userMessage, "kind", "text")),
+                        "messageId", UUID.randomUUID().toString()
+                )
+        ));
+
+        try {
+            return objectMapper.writeValueAsString(request);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    private String formatUserMessage(Map<String, Object> payload) {
+        // 根据实际业务参数，构建清晰的用户指令
+        String taskType = payload.getOrDefault("taskType", "").toString();
+        String topic = payload.getOrDefault("topic", "").toString();
+        String docType = payload.getOrDefault("docType", "技术报告").toString();
+        String userId = payload.getOrDefault("userId", "anonymous").toString();
+        String sessionId = payload.getOrDefault("sessionId", "").toString();
+
+        return String.format("""
+                        请执行任务：%s
+                        参数：
+                        - 主题：%s
+                        - 文档类型：%s
+                        - 用户ID：%s
+                        - 会话ID：%s
+                        请立即开始处理，不要询问更多信息。""",
+                taskType, topic, docType, userId, sessionId);
+    }
+
 
     private String extractThreadId(A2AMessage message) {
         return Optional.ofNullable(message)

@@ -107,15 +107,17 @@ public class DynamicGraphBuilder {
 
             Map<String, Object> payload = resolvePayload(template.getPayloadMapping(), state);
 
+            //把业务参数扁平化，不再嵌套在 "payload" 中
+            Map<String, Object> a2aPayload = new HashMap<>();
+            a2aPayload.put("taskType", template.getTaskType());
+            a2aPayload.put("threadId", threadId);
+            a2aPayload.putAll(payload);  // 直接把 topic, userId, sessionId 等放到顶层
+
             A2AResponse response = a2aRouter.routeMessage(A2AMessage.builder()
                     .senderAgentId("commander-agent")
                     .receiverAgentId(template.getTargetAgent())
                     .messageType(A2AMessageType.TASK_DELEGATION)
-                    .payload(Map.of(
-                            "taskType", template.getTaskType(),
-                            "payload", payload,
-                            "threadId", threadId)
-                    )
+                    .payload(a2aPayload )
                     .build());
             return response.isSuccess() ? Map.of("a2a_result", response.getPayload())
                     : Map.of("error", response.getErrorMessage());

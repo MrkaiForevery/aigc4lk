@@ -41,7 +41,7 @@ public class CommanderAgent {
     @Retry(name = "commander-retry")
     public CommanderResponse execute(CommanderRequest request) {
         String executionId = UUID.randomUUID().toString();
-        // ✅ 生成隔离标识
+        // 生成隔离标识
         String userId = Optional.ofNullable(request.getContext())
                 .map(ctx -> (String) ctx.get("userId"))
                 .orElse("anonymous");
