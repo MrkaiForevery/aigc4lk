@@ -1,25 +1,20 @@
-package com.air.commander.config;
+package com.air.commander.configuration;
 
+import com.air.commander.config.ChatModelApiKeyConfig;
 import com.air.commander.model.ChatModelRouter;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.air.platform.common.model.ModelDefinition;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chroma.vectorstore.ChromaApi;
-import org.springframework.ai.chroma.vectorstore.ChromaVectorStore;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClient;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,7 +26,6 @@ public class ChatClientConfiguration {
 
     private final ChatModelApiKeyConfig chatModelApiKeyConfig;
     private final ChatModelRouter chatModelRouter;
-    private final ChromaDbClientConfig chromaDbClientConfig;
 
     /**
      * 初始化的模型缓存bean，整个应用都可以使用
@@ -64,31 +58,38 @@ public class ChatClientConfiguration {
                 .defaultSystem("""
                         你是一个专业的意图分类专家。请分析用户输入，识别以下信息：
                         
-                        1. 场景类型 (scenario):
-                           - DOCUMENT_GENERATION: 文档生成、报告撰写
-                           - MARKET_ANALYSIS: 市场分析、数据洞察
-                           - INVESTMENT_DECISION: 投资决策、风险评估
-                           - CUSTOMER_SERVICE: 客服咨询、投诉建议
-                           - IMAGE_ANALYSIS: 图像识别、图片分析
-                           - SPEECH_RECOGNITION: 语音识别、音频处理
-                           - VIDEO_ANALYSIS: 视频分析、内容摘要
-                           - CODE_REVIEW: 代码审查
-                           - GENERAL: 通用任务
-                        
-                        2. 复杂度评估 (complexity): HIGH, MEDIUM, LOW
-                        
-                        3. 所需能力 (required_capabilities): REASONING, ANALYSIS, CODING, CHAT, FAST_RESPONSE
-                        
-                        4. 输入模态 (modality): TEXT, IMAGE, AUDIO, VIDEO
-                        
-                        请以JSON格式返回结果，不要包含其他内容。
-                        {
-                            "scenario": "场景类型",
-                            "complexity": "复杂度",
-                            "required_capabilities": ["能力列表"],
-                            "modality": "输入模态",
-                            "confidence": 0.0-1.0
-                        }
+                         1. 场景类型 (scenario):
+                            - DOCUMENT_GENERATION: 文档生成、报告撰写
+                            - MARKET_ANALYSIS: 市场分析、数据洞察
+                            - CODE_REVIEW: 代码审查
+                            - CUSTOMER_SERVICE: 客服咨询、投诉建议
+                            - IMAGE_ANALYSIS: 图像识别、图片分析
+                            - SPEECH_RECOGNITION: 语音识别、音频处理
+                            - VIDEO_ANALYSIS: 视频分析、内容摘要
+                            - TRANSLATION: 文本翻译
+                            - TEXT_SUMMARY: 摘要生成、会议纪要
+                            - INVESTMENT_DECISION: 投资决策、风险评估
+                            - MULTIMODAL_QA: 跨模态问答（图文混合等）
+                            - GENERAL: 通用任务
+    
+                         2. 复杂度评估 (complexity): HIGH, MEDIUM, LOW
+    
+                         3. 是否多步骤任务 (is_multi_step): true/false
+                            - 如果用户请求包含多个处理阶段（如"先...再...然后...最后..."），或者同时涉及多种模态（如音频+图像+文本），或者需要生成中间结果再汇总，则标记为 true
+    
+                         4. 所需能力 (required_capabilities): REASONING, ANALYSIS, CODING, CHAT, FAST_RESPONSE
+    
+                         5. 输入模态 (modality): TEXT, IMAGE, AUDIO, VIDEO
+    
+                         请以JSON格式返回结果，不要包含其他内容。
+                         {
+                             "scenario": "场景类型",
+                             "complexity": "复杂度",
+                             "is_multi_step": true/false,
+                             "required_capabilities": ["能力列表"],
+                             "modality": "输入模态",
+                             "confidence": 0.0-1.0
+                         }
                         """)
                 .build();
     }
@@ -178,39 +179,6 @@ public class ChatClientConfiguration {
     }
 
 
-    /**
-     * 创建 ChromaApi Bean，用于与 ChromaDB 通信
-     */
-    @Bean
-    public ChromaApi chromaApi(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
-        // 1. 构建 ChromaDB 连接 URL
-        String host = chromaDbClientConfig.getClient().getHost();
-        int port = chromaDbClientConfig.getClient().getPort();
-        String chromaUrl = host + ":" + port;
 
-        // 2. 创建 ChromaApi 实例
-        var chromaApi = new ChromaApi(chromaUrl, restClientBuilder, objectMapper);
-
-        // 3. 设置认证凭据
-        String keyToken = chromaDbClientConfig.getClient().getKeyToken();
-        if (StringUtils.hasText(keyToken)) {
-            chromaApi.withKeyToken(keyToken);
-        }
-        return chromaApi;
-    }
-
-    /**
-     * todo 这里先暂时不用动态的EmbeddingModel，固定用dashscope类型的
-     * 创建 ChromaVectorStore Bean
-     */
-    @Bean
-    public ChromaVectorStore chromaVectorStore(ChromaApi chromaApi, EmbeddingModel embeddingModel) {
-        return ChromaVectorStore.builder(chromaApi, embeddingModel)
-                .tenantName(chromaDbClientConfig.getTenantName())
-                .databaseName(chromaDbClientConfig.getDatabaseName())
-                .collectionName(chromaDbClientConfig.getCollectionName())
-                .initializeSchema(true) // 自动初始化集合
-                .build();
-    }
 
 }

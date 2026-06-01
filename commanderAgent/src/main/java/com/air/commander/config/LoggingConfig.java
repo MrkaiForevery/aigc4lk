@@ -8,7 +8,7 @@ import java.util.Map;
 
 @Data
 @RefreshScope
-@ConfigurationProperties(prefix = "platform.logging")
+@ConfigurationProperties(prefix = "logging")
 public class LoggingConfig {
     private Map<String, String> level;
     private Map<String, String> pattern;

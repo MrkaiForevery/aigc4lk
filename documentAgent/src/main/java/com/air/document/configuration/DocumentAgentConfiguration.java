@@ -1,6 +1,6 @@
-package com.air.document.config;
+package com.air.document.configuration;
 
-import com.air.document.mcp.DynamicMcpToolProvider;
+import com.air.document.config.ChatModelApiKeyConfig;
 import com.air.document.tools.DocumentAgentTools;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
@@ -11,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -45,8 +44,8 @@ public class DocumentAgentConfiguration{
     /**
      * ReactAgent Bean —— A2A 注册核心
      */
-    @Bean(name = "documentGenerationAgent")
-    public ReactAgent documentGenerationAgent(ChatModel chatModel, ToolCallbackProvider mcpToolProvider) {
+    @Bean(name = "document-agent")
+    public ReactAgent documentAgent(ChatModel chatModel, ToolCallbackProvider mcpToolProvider) {
         // 将自己内部服务的工具对象包装为 ToolCallbackProvider
         ToolCallbackProvider documentToolProvider  = MethodToolCallbackProvider.builder()
                 .toolObjects(documentAgentTools)

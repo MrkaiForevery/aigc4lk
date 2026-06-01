@@ -21,7 +21,6 @@ import java.util.UUID;
 
 /**
  * Commander Controller
- * 
  * 提供 Commander Agent 的 HTTP API：
  * - 同步执行
  * - 异步执行
@@ -61,31 +60,6 @@ public class CommanderController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * 异步执行（立即返回执行ID，后台执行）
-     * 
-     * 响应：{ "executionId": "xxx", "status": "processing" }
-     * 后续通过 /history/{executionId} 查询结果
-     */
-    @PostMapping("/execute/async")
-    public ResponseEntity<Map<String, Object>> executeAsync(@RequestBody CommanderRequest request) {
-        String executionId = UUID.randomUUID().toString();
-        log.info("📥 [HTTP] Async execute request, executionId: {}", executionId);
-
-        // 提交异步任务
-        commanderAgent.executeAsync(request)
-                .thenAccept(response -> log.info("📤 [Async] Task completed: {}", response.getExecutionId()))
-                .exceptionally(throwable -> {
-                    log.error("❌ [Async] Task failed: {}", executionId, throwable);
-                    return null;
-                });
-
-        return ResponseEntity.accepted().body(Map.of(
-                "execution_id", executionId,
-                "status", "processing",
-                "message", "Task submitted successfully. Check status via GET /history/" + executionId
-        ));
-    }
 
     /**
      * 阶段级流式执行 (SSE)

@@ -17,8 +17,7 @@ public class IntentClassifier {
     private final ChatClient intentClient;
     private final ObjectMapper objectMapper;
 
-    public IntentClassifier(
-            @Qualifier("intentClassificationClient") ChatClient intentClient) {
+    public IntentClassifier(@Qualifier("intentClassificationClient") ChatClient intentClient) {
         this.intentClient = intentClient;
         this.objectMapper = new ObjectMapper();
     }

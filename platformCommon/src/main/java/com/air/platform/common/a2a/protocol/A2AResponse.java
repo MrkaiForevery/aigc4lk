@@ -23,6 +23,10 @@ public class A2AResponse {
             .timestamp(System.currentTimeMillis())
             .build();
     }
+
+    public  boolean isSuccess(){
+        return ResponseStatus.SUCCESS.equals(this.status);
+    }
     
     public static A2AResponse failure(String correlationId, String errorCode, String errorMessage) {
         return A2AResponse.builder()

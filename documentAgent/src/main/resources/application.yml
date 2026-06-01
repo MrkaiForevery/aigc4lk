@@ -42,7 +42,7 @@ spring:
         server:
           version: 0.0.1
           card:
-            name: documentGenerationAgent    # 必须和 @Bean name 一致
+            name: document-agent    # 必须和 @Bean name 一致
             description: 文档生成智能体，支持技术报告、分析报告、会议纪要等文档生成
             provider:
               name: lk

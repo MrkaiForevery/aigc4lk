@@ -1,27 +1,20 @@
 package com.air.commander.agent;
 
-import com.air.api.feignClient.MemoryIdentityFeign;
-import com.air.commander.architecture.ArchitectureSelector;
-import com.air.commander.config.ChatClientConfiguration;
 import com.air.commander.entity.*;
+import com.air.commander.graph.DynamicGraphBuilder;
+import com.air.commander.graph.GraphTemplateSelector;
 import com.air.commander.intent.IntentClassifier;
 import com.air.commander.model.ChatModelRouter;
-import com.air.platform.common.a2a.channel.CommanderChannel;
-import com.air.platform.common.a2a.enums.A2AMessageType;
-import com.air.platform.common.a2a.protocol.A2AMessage;
-import com.air.platform.common.a2a.protocol.A2AResponse;
-import com.air.platform.common.a2a.router.NacosA2ARouter;
 import com.air.platform.common.tranfer.CommanderResponse;
-import io.a2a.spec.A2AServerException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,44 +23,19 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * CommanderAgent 不需要要通过A2A暴露自己的能力，它只负责调用其他业务agent
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CommanderAgent {
 
-    /**意图分析注入**/
     private final IntentClassifier intentClassifier;
-
-    /**架构策略注入**/
-    private final ArchitectureSelector architectureSelector;
-
-    /**模型配置匹配路由器**/
     private final ChatModelRouter chatModelRouter;
+    private final GraphTemplateSelector templateSelector;
+    private final DynamicGraphBuilder dynamicGraphBuilder;
 
-    /**模型本地缓存--->来源于ChatClientConfiguration**/
-    private final Map<String, ChatModel> modelCache;
-
-    /**模型客户端配置实例化句柄**/
-    private final ChatClientConfiguration chatClientConfiguration;
-
-    /**身份共享记忆调用FeignClient**/
-    private final MemoryIdentityFeign memoryIdentityFeign;
-
-    /**注入平台自定义的a2aRouter**/
-    private final NacosA2ARouter a2aRouter;
-
-    /**
-     * 执行历史 todo 这里后期要改成外部存储，构建共享的chatMemery时需要
-     */
     private final Map<String, ExecutionRecord> executionHistory = new ConcurrentHashMap<>();
 
-    //-------------------------------一次性结果防护处理-------------------------------------//
-    /**
-     * 主入口：处理用户请求
-     */
+    // ==================== 同步执行 ====================
     @CircuitBreaker(name = "architecture-execution", fallbackMethod = "fallbackExecute")
     @Retry(name = "commander-retry")
     public CommanderResponse execute(CommanderRequest request) {
@@ -77,52 +45,36 @@ public class CommanderAgent {
         log.info("🚀 [{}] Commander execution started", executionId);
 
         try {
-            // 阶段1：意图识别
+            // 1. 意图识别
             IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
             log.info("🎯 [{}] Intent: scenario={}, complexity={}, modality={}",
                     executionId, intent.getScenario(), intent.getComplexity(), intent.getModality());
 
-            // 阶段2：架构选择
-            CommanderChannel.ArchitectureSelection architecture = architectureSelector.selectArchitecture(intent);
-            log.info("🏗️ [{}] Architecture: {} (reason: {})",
-                    executionId, architecture.getArchitectureId(), architecture.getSelectionReason());
+            // 2. 选择 Graph 模板
+            String templateId = templateSelector.selectTemplate(intent);
+            log.info("🏗️ [{}] Graph template selected: {}", executionId, templateId);
 
-            // 阶段3：模型选择
-            ModelSelection model = chatModelRouter.selectModel(intent, architecture);
-            log.info("🤖 [{}] Model: {} ({})",
-                    executionId, model.getModelId(), model.getProvider());
+            // 3. 模型选择（用于记录和 state 传递）
+            ModelSelection model = chatModelRouter.selectModel(intent, null);
 
-            // 阶段4：构建执行输入
+            // 4. 构建执行输入
             Map<String, Object> executionInput = buildExecutionInput(request, intent, executionId);
+            executionInput.put("model_id", model.getModelId());
+            executionInput.put("complexity", intent.getComplexity());
+            executionInput.put("template_id", templateId);
 
-            // 阶段5：执行任务
-            Map<String, Object> result = executeTask(executionInput, architecture, model);
+            // 5. 编译并执行 Graph
+            Map<String, Object> result = dynamicGraphBuilder.compileAndExecute(templateId, executionInput);
 
-            // 阶段6：计算耗时
+            // 6. 计算耗时
             long durationMs = Duration.between(startTime, Instant.now()).toMillis();
 
-            // 阶段7：记录执行历史
-            recordExecution(executionId, request, intent, architecture, model, durationMs, true, false);
+            // 7. 记录
+            recordExecution(executionId, request, intent, templateId, model, durationMs, true, false);
 
             log.info("✅ [{}] Commander execution completed in {}ms", executionId, durationMs);
 
-            return CommanderResponse.success(
-                    executionId, result,
-                    CommanderResponse.ArchitectureInfo.builder()
-                            .architectureId(architecture.getArchitectureId())
-                            .architectureType(architecture.getArchitectureType())
-                            .selectionReason(architecture.getSelectionReason())
-                            .build(),
-                    CommanderResponse.ModelInfo.builder()
-                            .modelId(model.getModelId())
-                            .modelName(model.getModelName())
-                            .provider(model.getProvider())
-                            .selectionStrategy(model.getSelectionStrategy())
-                            .build(),
-                    intent.getScenario(),
-                    intent.getComplexity(),
-                    durationMs
-            );
+            return buildSuccessResponse(executionId, result, templateId, model, intent, durationMs);
 
         } catch (Exception e) {
             log.error("❌ [{}] Commander execution failed", executionId, e);
@@ -132,54 +84,32 @@ public class CommanderAgent {
         }
     }
 
-    /**
-     * 异步执行
-     */
-    @Async
-    public CompletableFuture<CommanderResponse> executeAsync(CommanderRequest request) {
-        return CompletableFuture.completedFuture(execute(request));
-    }
-
-    /**
-     * 降级执行
-     */
+    // ==================== 降级 ====================
     public CommanderResponse fallbackExecute(CommanderRequest request, Throwable t) {
         String executionId = UUID.randomUUID().toString();
         Instant startTime = Instant.now();
 
-        log.warn("🔄 [{}] Fallback execution triggered due to: {}", executionId, t.getMessage());
+        log.warn("🔄 [{}] Fallback triggered: {}", executionId, t.getMessage());
 
         try {
-            // 使用最简单的架构和最稳定的模型
-            CommanderChannel.ArchitectureSelection fallbackArchitecture = CommanderChannel.ArchitectureSelection.builder()
-                    .architectureId("sequential-pipeline")
-                    .architectureType("SEQUENTIAL")
-                    .selectionReason("Fallback降级")
-                    .build();
+            // 使用最简单的单次 LLM 调用模板
+            String fallbackTemplateId = "single-llm-call";
 
-            ModelSelection fallbackModel = ModelSelection.builder()
-                    .modelId("qwen-turbo")
-                    .modelName("qwen-turbo")
-                    .provider("alibaba")
-                    .selectionStrategy("fallback")
-                    .build();
+            Map<String, Object> input = new java.util.HashMap<>();
+            input.put("query", request.getUserInput());
+            input.put("model_id", "qwen-turbo");
+            input.put("complexity", "LOW");
+            input.put("execution_id", executionId + "-fallback");
+            input.put("fallback", true);
 
-            // 降级时也通过动态创建获取模型
-            ChatModel fallbackChatModel = getOrCreateChatModel(fallbackModel);
-
-            // 构建执行参数
-            Map<String, Object> executionInput = new java.util.HashMap<>();
-            executionInput.put("query", request.getUserInput());
-            executionInput.put("execution_id", executionId + "-fallback");
-            executionInput.put("fallback", true);
-
-            // ✅ 关键：将降级模型放入输入中，传递给 executeTask
-            executionInput.put("_fallback_chat_model_", fallbackChatModel);
-
-            Map<String, Object> result = executeTask(executionInput, fallbackArchitecture, fallbackModel);
+            Map<String, Object> result = dynamicGraphBuilder.compileAndExecute(fallbackTemplateId, input);
 
             long durationMs = Duration.between(startTime, Instant.now()).toMillis();
-            log.info("✅ [{}] Fallback execution completed in {}ms", executionId, durationMs);
+
+            // 降级记录
+            ModelSelection fallbackModel = ModelSelection.builder()
+                    .modelId("qwen-turbo").modelName("qwen-turbo").provider("alibaba").build();
+            recordExecution(executionId, request, null, fallbackTemplateId, fallbackModel, durationMs, true, true);
 
             return CommanderResponse.fallback(executionId, result, t.getMessage(), durationMs);
 
@@ -190,383 +120,100 @@ public class CommanderAgent {
         }
     }
 
-
-    //-------------------------------流式结果结果返回处理-------------------------------------//
-    /**
-     * 流式执行 - 中间阶段推送进度，最终返回完整的 CommanderResponse
-     */
+    // ==================== 流式执行 ====================
     public Flux<CommanderResponse> executeStream(CommanderRequest request) {
         String executionId = UUID.randomUUID().toString();
         Instant startTime = Instant.now();
 
         return Flux.create(sink -> {
             try {
-                // 阶段1：意图识别
+                // 1. 意图识别
                 pushProgress(sink, executionId, "INTENT_ANALYSIS");
                 IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
 
-                // 阶段2：架构选择
-                pushProgress(sink, executionId, "ARCHITECTURE_SELECTION");
-                CommanderChannel.ArchitectureSelection architecture =
-                        architectureSelector.selectArchitecture(intent);
+                // 2. 模板选择
+                pushProgress(sink, executionId, "TEMPLATE_SELECTION");
+                String templateId = templateSelector.selectTemplate(intent);
 
-                // 阶段3：模型选择
+                // 3. 模型选择
                 pushProgress(sink, executionId, "MODEL_SELECTION");
-                ModelSelection model = chatModelRouter.selectModel(intent, architecture);
+                ModelSelection model = chatModelRouter.selectModel(intent, null);
 
-                // 阶段4-5：执行任务
-                pushProgress(sink, executionId, "TASK_EXECUTION");
+                // 4. 构建输入
                 Map<String, Object> executionInput = buildExecutionInput(request, intent, executionId);
-                Map<String, Object> result = executeTask(executionInput, architecture, model);
+                executionInput.put("model_id", model.getModelId());
+                executionInput.put("complexity", intent.getComplexity());
 
-                // 构建完整的 CommanderResponse（和同步方法一样）
+                // 5. 执行
+                pushProgress(sink, executionId, "TASK_EXECUTION");
+                Map<String, Object> result = dynamicGraphBuilder.compileAndExecute(templateId, executionInput);
+
                 long durationMs = Duration.between(startTime, Instant.now()).toMillis();
 
-                CommanderResponse response = CommanderResponse.success(
-                        executionId, result,
-                        CommanderResponse.ArchitectureInfo.builder()
-                                .architectureId(architecture.getArchitectureId())
-                                .architectureType(architecture.getArchitectureType())
-                                .selectionReason(architecture.getSelectionReason())
-                                .build(),
-                        CommanderResponse.ModelInfo.builder()
-                                .modelId(model.getModelId())
-                                .modelName(model.getModelName())
-                                .provider(model.getProvider())
-                                .selectionStrategy(model.getSelectionStrategy())
-                                .build(),
-                        intent.getScenario(),
-                        intent.getComplexity(),
-                        durationMs
-                );
-
-                // 最终推送完整结果
+                CommanderResponse response = buildSuccessResponse(executionId, result, templateId, model, intent, durationMs);
                 sink.next(response);
                 sink.complete();
 
             } catch (Exception e) {
+                log.error("❌ [{}] Stream execution failed", executionId, e);
                 sink.error(e);
             }
         });
     }
 
     /**
-     * 推送进度事件（用特殊标记的 CommanderResponse 表示进度）
-     */
-    private void pushProgress(
-            reactor.core.publisher.FluxSink<CommanderResponse> sink,
-            String executionId,
-            String stage) {
-
-        // 进度事件：success=false 且带有特殊标记
-        CommanderResponse progress = CommanderResponse.builder()
-                .executionId(executionId)
-                .success(false)           // 进度事件标记为"未完成"
-                .fallback(false)
-                .stage(stage)             // 当前阶段（需要在 CommanderResponse 中加这个字段）
-                .build();
-
-        sink.next(progress);
-    }
-
-
-    /**
-     * Token 级别的流式输出 - 实时返回模型生成的每个 Token
+     * Token 级别流式输出 - 同样基于动态 Graph，但需特殊处理流式结果
      */
     public Flux<String> executeTokenStream(CommanderRequest request) {
         String executionId = UUID.randomUUID().toString();
 
-        return Flux.defer(() -> {
-            IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
-            CommanderChannel.ArchitectureSelection architecture = architectureSelector.selectArchitecture(intent);
-            ModelSelection model = chatModelRouter.selectModel(intent, architecture);
+        return Mono.fromCallable(() -> {
+                    IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput());
+                    String templateId = templateSelector.selectTemplate(intent);
+                    ModelSelection model = chatModelRouter.selectModel(intent, null);
 
-            // ✅ 新增：根据场景决定是否委托给子 Agent
-            if ("DOCUMENT_GENERATION".equals(intent.getScenario())) {
-                return executeDocumentGenerationStream(request, intent, model);
-            }
+                    Map<String, Object> executionInput = buildExecutionInput(request, intent, executionId);
+                    executionInput.put("model_id", model.getModelId());
+                    executionInput.put("complexity", intent.getComplexity());
 
-//            if ("MARKET_ANALYSIS".equals(intent.getScenario())) {
-//                return executeMarketAnalysisStream(request, intent, model);
-//            }
-
-            // 动态获取模型
-            ChatModel selectedModel = getOrCreateChatModel(model);
-            ChatClient client = ChatClient.builder(selectedModel).build();
-
-            Map<String, Object> executionInput = buildExecutionInput(request, intent, executionId);
-
-            return Flux.just(
-                    "📋 场景: " + intent.getScenario() + "\n",
-                    "🏗️ 架构: " + architecture.getArchitectureId() + "\n",
-                    "🤖 模型: " + model.getModelName() + "\n\n"
-            ).concatWith(
-                    // 流式调用模型
-                    client.prompt()
-                            .user(userMessage -> userMessage
-                                    .text("处理以下请求：{query}")
-                                    .param("query", executionInput.get("query").toString()))
-                            .stream()
-                            .content()
-            );
-        });
+                    return dynamicGraphBuilder.compileAndExecute(templateId, executionInput);
+                })
+                .flatMapMany(result -> {
+                    // 将最终结果转为 Token 流（简化处理：直接输出整个结果文本）
+                    String text = result != null ? result.toString() : "No result";
+                    return Flux.fromArray(text.split("(?<=\\G.{1})")); // 逐字符发送
+                })
+                .onErrorResume(e -> Flux.just("❌ 执行失败: " + e.getMessage()));
     }
 
-    /**
-     * 执行具体任务
-     */
-    private Map<String, Object> executeTask(
-            Map<String, Object> input,
-            CommanderChannel.ArchitectureSelection architecture,
-            ModelSelection model) throws A2AServerException {
-        String scenario = (String) input.get("scenario");  // 来自意图识别
-
-        // ✅ 根据场景决定是否委托给子 Agent
-        if ("DOCUMENT_GENERATION".equals(scenario)) {
-            return executeDocumentGeneration(input, model);    // 跳转 DocumentAgent
-        }
-//        if ("MARKET_ANALYSIS".equals(scenario)) {
-//            return executeMarketAnalysis(input, model);        // 跳转 AnalysisAgent
-//        }
-
-        // 根据架构类型执行不同的逻辑
-        return switch (architecture.getArchitectureType()) {
-            case "SEQUENTIAL" -> executeSequential(input, model);
-            case "PARALLEL" -> executeParallel(input, model);
-            case "LLM_ROUTING" -> executeLlmRouting(input, model);
-            case "CUSTOM_GRAPH" -> executeCustomGraph(input, model);
-            default -> executeDefault(input, model);
-        };
-    }
-
-    /**
-     * 顺序执行
-     */
-    private Map<String, Object> executeSequential(Map<String, Object> input, ModelSelection model) {
-        log.debug("Executing sequential pipeline with model: {}", model.getModelId());
-
-        // 使用 ChatClient 进行顺序处理
-        ChatModel selectedModel = getOrCreateChatModel(model);
-        ChatClient client = ChatClient.builder(selectedModel).build();
-
-        // 阶段1：分析
-        String analysis = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("分析以下请求：{query}")
-                        .param("query", input.get("query").toString()))
-                .call()
-                .content();
-
-        // 阶段2：处理
-        String processed = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("基于分析结果进行处理：\n分析：{analysis}\n原始请求：{query}")
-                        .param("analysis", analysis)  // 参数1
-                        .param("query", input.get("query").toString())        // 参数2
-                )
-                .call()
-                .content();
-
-        // 阶段3：生成最终结果
-        String finalResult = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("基于处理结果生成最终输出：\n处理结果：{processed}")
-                        .param("processed", processed)
-                )
-                .call()
-                .content();
-
-        return Map.of(
-                "analysis", analysis,
-                "processed", processed,
-                "final_result", finalResult,
-                "architecture", "sequential-pipeline",
-                "model", model.getModelName()
+    // ==================== 辅助方法 ====================
+    private CommanderResponse buildSuccessResponse(String executionId,
+                                                    Map<String, Object> result,
+                                                    String templateId,
+                                                    ModelSelection model,
+                                                    IntentAnalysis intent,
+                                                    long durationMs) {
+        return CommanderResponse.success(
+                executionId, result,
+                CommanderResponse.ArchitectureInfo.builder()
+                        .architectureId(templateId)
+                        .architectureType("GRAPH_DYNAMIC")
+                        .selectionReason("Template: " + templateId)
+                        .build(),
+                CommanderResponse.ModelInfo.builder()
+                        .modelId(model.getModelId())
+                        .modelName(model.getModelName())
+                        .provider(model.getProvider())
+                        .selectionStrategy(model.getSelectionStrategy())
+                        .build(),
+                intent.getScenario(),
+                intent.getComplexity(),
+                durationMs
         );
     }
 
-    /**
-     * 并行执行（简化版 - 使用多轮对话模拟）
-     */
-    private Map<String, Object> executeParallel(Map<String, Object> input, ModelSelection model) {
-        log.debug("Executing parallel analysis with model: {}", model.getModelId());
-
-        ChatModel selectedModel = getOrCreateChatModel(model);
-        ChatClient client = ChatClient.builder(selectedModel).build();
-
-        // 并行分析多个维度
-        String dimension1 = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("从维度1分析：{query}")
-                        .param("query", input.get("query").toString()))
-                .call()
-                .content();
-
-        String dimension2 = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("从维度2分析：{query}")
-                        .param("query", input.get("query").toString()))
-                .call()
-                .content();
-
-        String dimension3 = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("从维度3分析：{query}")
-                        .param("query", input.get("query").toString()))
-                .call()
-                .content();
-
-        // 汇总分析
-        String summary = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("""
-                                汇总以下多维度分析结果：
-                                维度1：{dim1}
-                                维度2：{dim2}
-                                维度3：{dim3}
-                                """)
-                        .param("dim1", dimension1)
-                        .param("dim2", dimension2)
-                        .param("dim3", dimension3)
-                )
-                .call()
-                .content();
-
-        return Map.of(
-                "dimension_1", dimension1,
-                "dimension_2", dimension2,
-                "dimension_3", dimension3,
-                "summary", summary,
-                "architecture", "parallel-analysis",
-                "model", model.getModelName()
-        );
-    }
-
-    /**
-     * LLM路由执行
-     */
-    private Map<String, Object> executeLlmRouting(Map<String, Object> input, ModelSelection model) {
-        log.debug("Executing LLM routing with model: {}", model.getModelId());
-
-        ChatModel selectedModel = getOrCreateChatModel(model);
-        ChatClient client = ChatClient.builder(selectedModel).build();
-
-        // LLM决定路由到哪个处理器
-        String routingDecision = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("""
-                                根据以下请求，决定最适合的处理方式。返回JSON：
-                                {
-                                    "route": "after_sales|tech_support|complaint|general",
-                                    "reason": "路由原因"
-                                }
-                                
-                                请求：{query}
-                                """)
-                        .param("query", input.get("query").toString())
-                )
-                .call()
-                .content();
-
-        // 根据路由执行处理
-        String result = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("根据路由决策 {route} 处理请求：{query}")
-                        .param("route", routingDecision)
-                        .param("query", input.get("query").toString())
-                )
-                .call()
-                .content();
-
-        return Map.of(
-                "routing_decision", routingDecision,
-                "result", result,
-                "architecture", "llm-routing",
-                "model", model.getModelName()
-        );
-    }
-
-    /**
-     * 自定义图执行
-     */
-    private Map<String, Object> executeCustomGraph(Map<String, Object> input, ModelSelection model) {
-        log.debug("Executing custom graph with model: {}", model.getModelId());
-
-        ChatModel selectedModel = getOrCreateChatModel(model);
-        ChatClient client = ChatClient.builder(selectedModel).build();
-
-        // 多轮辩论
-        StringBuilder debateHistory = new StringBuilder();
-
-        // 第1轮
-        String round1 = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("提出初始观点：{query}")
-                        .param("query", input.get("query").toString())
-                )
-                .call()
-                .content();
-        debateHistory.append("第1轮观点：").append(round1).append("\n");
-
-        // 第2轮
-        String round2 = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("基于以下观点提出反驳或补充：\n{history}")
-                        .param("history", debateHistory.toString())
-                )
-                .call()
-                .content();
-        debateHistory.append("第2轮观点：").append(round2).append("\n");
-
-        // 仲裁
-        String arbitration = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("基于以下辩论内容做出最终决策：\n{history}")
-                        .param("history", debateHistory.toString())
-                )
-                .call()
-                .content();
-
-        return Map.of(
-                "debate_history", debateHistory.toString(),
-                "arbitration", arbitration,
-                "architecture", "custom-graph",
-                "model", model.getModelName()
-        );
-    }
-
-    /**
-     * 默认执行
-     */
-    private Map<String, Object> executeDefault(Map<String, Object> input, ModelSelection model) {
-        log.debug("Executing default pipeline with model: {}", model.getModelId());
-
-        ChatModel selectedModel = getOrCreateChatModel(model);
-        ChatClient client = ChatClient.builder(selectedModel).build();
-
-        String result = client.prompt()
-                .user(userMessage -> userMessage
-                        .text("处理以下请求：{query}")
-                        .param("query", input.get("query").toString())
-                )
-                .call()
-                .content();
-
-        return Map.of(
-                "result", result,
-                "architecture", "default",
-                "model", model.getModelName()
-        );
-    }
-
-    /**
-     * 构建执行输入
-     */
     private Map<String, Object> buildExecutionInput(
-            CommanderRequest request,
-            IntentAnalysis intent,
-            String executionId) {
-
+            CommanderRequest request, IntentAnalysis intent, String executionId) {
         Map<String, Object> input = new ConcurrentHashMap<>();
         input.put("query", request.getUserInput());
         input.put("execution_id", executionId);
@@ -578,167 +225,52 @@ public class CommanderAgent {
         if (request.getContext() != null) {
             input.putAll(request.getContext());
         }
-
-        if (request.getImageBase64() != null) {
-            input.put("image_base64", request.getImageBase64());
-        }
-        if (request.getAudioBase64() != null) {
-            input.put("audio_base64", request.getAudioBase64());
-        }
-        if (request.getVideoUrl() != null) {
-            input.put("video_url", request.getVideoUrl());
-        }
-
+        if (request.getImageBase64() != null) input.put("image_base64", request.getImageBase64());
+        if (request.getAudioBase64() != null) input.put("audio_base64", request.getAudioBase64());
+        if (request.getVideoUrl() != null) input.put("video_url", request.getVideoUrl());
         return input;
     }
 
-    /**
-     * 记录执行历史
-     */
-    private void recordExecution(
-            String executionId,
-            CommanderRequest request,
-            IntentAnalysis intent,
-            CommanderChannel.ArchitectureSelection architecture,
-            ModelSelection model,
-            long durationMs,
-            boolean success,
-            boolean fallback) {
+    private void pushProgress(FluxSink<CommanderResponse> sink, String executionId, String stage) {
+        CommanderResponse progress = CommanderResponse.builder()
+                .executionId(executionId)
+                .success(false)
+                .fallback(false)
+                .stage(stage)
+                .build();
+        sink.next(progress);
+    }
 
+    private void recordExecution(String executionId, CommanderRequest request,
+                                 IntentAnalysis intent, String templateId, ModelSelection model,
+                                 long durationMs, boolean success, boolean fallback) {
         ExecutionRecord record = ExecutionRecord.builder()
                 .executionId(executionId)
                 .sessionId(request.getSessionId())
                 .timestamp(System.currentTimeMillis())
                 .scenario(intent != null ? intent.getScenario() : "UNKNOWN")
                 .complexity(intent != null ? intent.getComplexity() : "UNKNOWN")
-                .architectureId(architecture != null ? architecture.getArchitectureId() : "fallback")
+                .architectureId(templateId != null ? templateId : "fallback")
                 .modelId(model != null ? model.getModelId() : "fallback")
                 .modality(intent != null ? intent.getModality() : "TEXT")
                 .durationMs(durationMs)
                 .success(success)
                 .fallback(fallback)
                 .build();
-
         executionHistory.put(executionId, record);
-
-        // 限制历史记录大小
         if (executionHistory.size() > 10000) {
-            // 清理旧记录
             executionHistory.entrySet().removeIf(entry ->
                     System.currentTimeMillis() - entry.getValue().getTimestamp() > 3600000);
         }
     }
 
-    /**
-     * 获取执行历史
-     */
     public ExecutionRecord getExecutionHistory(String executionId) {
         return executionHistory.get(executionId);
     }
 
-    /**
-     * 自定义异常 todo 这个异常的要提出来
-     */
     public static class CommanderExecutionException extends RuntimeException {
         public CommanderExecutionException(String message, Throwable cause) {
             super(message, cause);
-        }
-    }
-
-
-
-    /**
-     * 根据 ModelSelection 动态创建 ChatModel
-     */
-    private ChatModel getOrCreateChatModel(ModelSelection model) {
-        String modelId = model.getModelId();
-
-        // 1. 先从缓存中获取
-        ChatModel chatModel = modelCache.get(modelId);
-        if (chatModel != null) {
-            return chatModel;
-        }
-
-        // 2. 缓存中没有，则通过 ChatClientConfiguration 创建
-        log.info("Creating new ChatModel for: {}", modelId);
-        chatModel = chatClientConfiguration.createModel(modelId);
-
-        // 3. 放入缓存
-        modelCache.put(modelId, chatModel);
-
-        return chatModel;
-    }
-
-    /**
-     * 委托给 DocumentAgent 的同步返回
-     */
-    private Map<String, Object> executeDocumentGeneration(Map<String, Object> input, ModelSelection model) throws A2AServerException {
-        String topic = (String) input.get("query");
-        String userId = (String) input.get("user_id");
-        String sessionId = (String) input.get("session_id");
-
-        // 构建 A2A 消息
-        A2AMessage taskMessage = A2AMessage.builder()
-                .senderAgentId("commander-agent")
-                .receiverAgentId("document-agent")
-                .messageType(A2AMessageType.TASK_DELEGATION)
-                .payload(Map.of(
-                        "taskId", UUID.randomUUID().toString(),
-                        "taskType", "GENERATE_DOCUMENT",
-                        "payload", Map.of(
-                                "topic", topic,
-                                "docType", "技术报告",
-                                "userId", userId,
-                                "sessionId", sessionId,
-                                "recommendedModel", model.getModelId()  // commander传给子Agent的建议模型，子agent一般不会采纳
-                        )
-                ))
-                .build();
-        // 2. 构建发送参数
-        A2AResponse a2AResponse = a2aRouter.routeMessage(taskMessage);
-
-        // 3. 返回结果
-        if (A2AResponse.ResponseStatus.SUCCESS.equals(a2AResponse.getStatus())) {
-            return (Map<String, Object>) a2AResponse.getPayload();
-        } else {
-            return Map.of("success", false, "error", a2AResponse.getErrorMessage());
-        }
-    }
-
-    /**
-     * 委托给 DocumentAgent 的流式返回
-     */
-    private Flux<String> executeDocumentGenerationStream(CommanderRequest request, IntentAnalysis intent, ModelSelection model) {
-        String topic = request.getUserInput();
-        String userId = request.getContext() != null ? request.getContext().get("userId").toString() : null;
-        String sessionId = request.getSessionId();
-
-        A2AMessage taskMessage = A2AMessage.builder()
-                .senderAgentId("commander-agent")
-                .receiverAgentId("document-agent")
-                .messageType(A2AMessageType.TASK_DELEGATION)
-                .payload(Map.of(
-                        "taskId", UUID.randomUUID().toString(),
-                        "taskType", "GENERATE_DOCUMENT",
-                        "payload", Map.of(
-                                "topic", topic,
-                                "docType", "技术报告",
-                                "userId", userId,
-                                "sessionId", sessionId,
-                                "recommendedModel", model.getModelId()  // commander传给子Agent的建议模型，子agent一般不会采纳
-                        )
-                ))
-                .build();
-
-        try {
-            A2AResponse response = a2aRouter.routeMessage(taskMessage);
-            Map<String, Object> result = (Map<String, Object>) response.getPayload();
-            String document = (String) result.get("document");
-
-            // 将子 Agent 返回的文档拆成字符流（简单模拟流式输出）
-            return Flux.fromArray(document.split("(?<=\\G.{1})"));  // 逐字符输出
-        } catch (Exception e) {
-            return Flux.just("❌ 文档生成失败: " + e.getMessage());
         }
     }
 }

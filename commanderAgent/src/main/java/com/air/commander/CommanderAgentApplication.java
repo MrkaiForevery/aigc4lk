@@ -20,6 +20,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
         CommanderMetaConfig.class,
         LoggingConfig.class,
         ChromaDbClientConfig.class,
+        GraphTemplateConfig.class,
 })
 @EnableDiscoveryClient
 @SpringBootApplication
