@@ -27,8 +27,7 @@ public class ChatModelRouter {
     /**
      * 选择最佳模型
      */
-    public ModelSelection selectModel(IntentAnalysis intent,
-                                      CommanderChannel.ArchitectureSelection architecture) {
+    public ModelSelection selectModel(IntentAnalysis intent) {
         // 1. 根据复杂度选择模型ID
         String modelId = commanderMetaConfig.getComplexityModelMapping()
                 .getOrDefault(intent.getComplexity(), "qwen-plus");

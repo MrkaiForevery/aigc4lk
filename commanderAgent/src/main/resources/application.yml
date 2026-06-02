@@ -61,6 +61,8 @@ logging:
     com.alibaba.nacos.client: DEBUG
     com.alibaba.cloud.nacos.configdata: DEBUG
     org.springframework.boot.context.config: DEBUG
+    com.air.platform.common.a2a.router.NacosA2ARouter: DEBUG
+    com.air.commander.graph.DynamicGraphBuilder: DEBUG
 
 springdoc:
   api-docs:

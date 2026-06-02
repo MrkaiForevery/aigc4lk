@@ -53,3 +53,11 @@ spring:
     mcp:
       client:
         enabled: false  # 禁用 MCP 客户端自动配置 todo 临时禁止
+
+logging:
+  level:
+    com.alibaba.cloud.ai.graph: DEBUG
+    com.alibaba.cloud.ai.agent: DEBUG
+    com.alibaba.cloud.ai.a2a: DEBUG
+    org.springframework.ai: DEBUG
+    com.air.document: DEBUG

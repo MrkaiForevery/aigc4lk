@@ -13,11 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Commander Controller
@@ -39,31 +37,8 @@ public class CommanderController {
     private final ChatModelRouter chatModelRouter;
 
     // ==================== 执行接口 ====================
-
-    /**
-     * 同步执行
-     * 
-     * 请求体示例：
-     * {
-     *   "userInput": "分析当前AI行业发展趋势",
-     *   "sessionId": "session-001",
-     *   "context": { "userId": "u123" }
-     * }
-     * 
-     * 响应：完整的 CommanderResponse（包含架构信息、模型信息、耗时等）
-     */
-    @PostMapping("/execute")
-    public ResponseEntity<CommanderResponse> execute(@RequestBody CommanderRequest request) {
-        log.info("📥 [HTTP] Sync execute request, session: {}", request.getSessionId());
-        CommanderResponse response = commanderAgent.execute(request);
-        log.info("📤 [HTTP] Sync execute completed: {}", response.getExecutionId());
-        return ResponseEntity.ok(response);
-    }
-
-
     /**
      * 阶段级流式执行 (SSE)
-     * 
      * 推送两种事件：
      * 1. event: progress  → CommanderResponse（stage 有值，success=false）
      * 2. event: result    → CommanderResponse（stage 为 null，success=true）
@@ -96,46 +71,7 @@ public class CommanderController {
                 .doOnError(e -> log.error("❌ [HTTP] Stream execute failed", e));
     }
 
-    /**
-     * Token 级流式执行 (SSE)
-     * 
-     * 推送两种事件：
-     * 1. event: metadata → 执行元信息（执行ID、模型名等）
-     * 2. event: token    → 模型生成的文本片段
-     * 
-     * 客户端示例：
-     * eventSource.addEventListener("metadata", (e) => { showMeta(JSON.parse(e.data)); });
-     * eventSource.addEventListener("token",    (e) => { appendText(e.data); });
-     */
-    @PostMapping(value = "/execute/stream/token", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> executeTokenStream(@RequestBody CommanderRequest request) {
-        String executionId = UUID.randomUUID().toString();
-        log.info("📥 [HTTP] Token stream request, executionId: {}", executionId);
-
-        // 先发送元信息
-        ServerSentEvent<String> metadata = ServerSentEvent.<String>builder()
-                .id(executionId)
-                .event("metadata")
-                .data("{\"executionId\":\"" + executionId + "\",\"timestamp\":" + System.currentTimeMillis() + "}")
-                .build();
-
-        // 再发送 token 流
-        Flux<ServerSentEvent<String>> tokens = commanderAgent.executeTokenStream(request)
-                .map(token -> ServerSentEvent.<String>builder()
-                        .id(executionId)
-                        .event("token")
-                        .data(token)
-                        .build());
-
-        return Flux.concat(
-                Mono.just(metadata),
-                tokens
-        ).doOnComplete(() -> log.info("📤 [HTTP] Token stream completed: {}", executionId))
-         .doOnError(e -> log.error("❌ [HTTP] Token stream failed: {}", executionId, e));
-    }
-
     // ==================== 查询接口 ====================
-
     /**
      * 查询执行历史
      */
@@ -147,35 +83,6 @@ public class CommanderController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(record);
-    }
-
-    /**
-     * 获取可用架构列表
-     */
-    @GetMapping("/architectures")
-    public ResponseEntity<List<Map<String, String>>> getArchitectures() {
-        return ResponseEntity.ok(List.of(
-                Map.of(
-                        "id", "sequential-pipeline",
-                        "type", "SEQUENTIAL",
-                        "description", "顺序流水线 - 适用于文档生成、代码审查等线性任务"
-                ),
-                Map.of(
-                        "id", "parallel-analysis",
-                        "type", "PARALLEL",
-                        "description", "并行分析 - 适用于多维度数据分析"
-                ),
-                Map.of(
-                        "id", "smart-routing",
-                        "type", "LLM_ROUTING",
-                        "description", "智能路由 - 适用于客服工单分发"
-                ),
-                Map.of(
-                        "id", "debate-system",
-                        "type", "CUSTOM_GRAPH",
-                        "description", "辩论系统 - 适用于投资决策等需要多视角的任务"
-                )
-        ));
     }
 
     /**

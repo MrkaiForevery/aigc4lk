@@ -5,6 +5,7 @@ import com.air.platform.common.a2a.protocol.A2AResponse;
 import com.air.platform.common.multimodal.vo.AgentInstance;
 import com.air.platform.common.multimodal.vo.AgentMetadata;
 import com.air.platform.common.enums.ModalityType;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
@@ -16,12 +17,13 @@ import java.util.Map;
 public interface A2ARouter {
     
     /**
-     * 路由A2A消息
+     * 路由A2A消息(同步阻塞等待子Agent流式返回成功后解析)
      * @param message A2A消息
-     * @return 响应
+     * @return 响应结果
      */
     A2AResponse routeMessage(A2AMessage message);
-    
+
+
     /**
      * 发现Agent实例
      * @param agentId Agent ID（支持模糊匹配）

@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Flux;
 
 import java.util.*;
 
@@ -33,7 +34,6 @@ public class DynamicGraphBuilder {
 
 
     // ==================== 对外api ====================
-
     /**
      * 根据模板 ID 动态构建 StateGraph
      */
@@ -47,6 +47,24 @@ public class DynamicGraphBuilder {
             case "CONDITIONAL" -> buildConditionalGraph(template);
             default -> throw new UnsupportedOperationException("Unknown type: " + template.getType());
         };
+    }
+
+    /**
+     * 统一的流式执行入口(伪装的流式)
+     * 内部同步执行 StateGraph，然后将结果拆分为字符流
+     */
+    public Flux<String> compileAndExecuteStream(String templateId, Map<String, Object> input) {
+        GraphTemplate template = findTemplate(templateId);
+        // 其他模板：同步执行 StateGraph，提取最终文本后拆分
+        return Flux.defer(() -> {
+            try {
+                Map<String, Object> result = compileAndExecute(templateId, input);
+                String text = extractFinalText(template, result);
+                return Flux.fromArray(text.split("(?<=\\G.{1})"));
+            } catch (GraphStateException e) {
+                return Flux.error(e);
+            }
+        });
     }
 
     /**
@@ -315,7 +333,6 @@ public class DynamicGraphBuilder {
     }
 
     // ==================== 工具方法 ====================
-
     private GraphTemplate findTemplate(String templateId) {
         return templateConfig.getTemplates().stream()
                 .filter(t -> t.getTemplateId().equals(templateId))
@@ -369,5 +386,42 @@ public class DynamicGraphBuilder {
         String modelId = state.value("model_id").orElse("qwen-turbo").toString();
         return modelCache.computeIfAbsent(modelId, id -> modelCache.getOrDefault("qwen-turbo",
                 modelCache.values().stream().findFirst().orElse(null)));
+    }
+
+    private Map<String, Object> resolvePayloadFromMap(Map<String, Object> mapping, Map<String, Object> stateMap) {
+        Map<String, Object> payload = new HashMap<>();
+        if (mapping == null) return payload;
+        mapping.forEach((key, value) -> {
+            if (value instanceof String str && str.startsWith("{") && str.endsWith("}")) {
+                String stateKey = str.substring(1, str.length() - 1);
+                payload.put(key, stateMap.getOrDefault(stateKey, ""));
+            } else {
+                payload.put(key, value);
+            }
+        });
+        return payload;
+    }
+
+
+    /**
+     * todo 这个涉及多模态的转化，需要定义一个统一的响应response提取工具类，要慢点来
+     * 从同步执行结果中提取最终文本，这里只是提取文本
+     */
+    private String extractFinalText(GraphTemplate template, Map<String, Object> result) {
+        // 优先取最后一个节点的 outputKey
+        if ("SEQUENTIAL".equals(template.getType()) && template.getNodes() != null) {
+            String lastOutputKey = template.getNodes().get(template.getNodes().size() - 1).getOutputKey();
+            return result.getOrDefault(lastOutputKey, "").toString();
+        }
+        if ("PARALLEL".equals(template.getType()) && template.getMerge() != null) {
+            return result.getOrDefault(template.getMerge().getOutputKey(), "").toString();
+        }
+
+        if ("A2A_DELEGATE".equals(template.getType()) && template.getMerge() != null) {
+          //todo 实现提取逻辑
+        }
+
+        // 默认整个结果转字符串
+        return result.toString();
     }
 }

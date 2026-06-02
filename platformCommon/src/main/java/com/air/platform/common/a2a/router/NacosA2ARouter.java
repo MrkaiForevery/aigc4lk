@@ -6,32 +6,22 @@ import com.air.platform.common.a2a.protocol.A2AResponse;
 import com.air.platform.common.multimodal.vo.AgentInstance;
 import com.air.platform.common.multimodal.vo.AgentMetadata;
 import com.air.platform.common.enums.ModalityType;
-import com.alibaba.cloud.ai.graph.OverAllState;
-import com.alibaba.cloud.ai.graph.RunnableConfig;
-import com.alibaba.cloud.ai.graph.agent.a2a.A2aRemoteAgent;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardProvider;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 
-import com.alibaba.fastjson.JSON;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * Nacos 3.2 原生A2A路由器实现
@@ -47,15 +37,9 @@ public class NacosA2ARouter implements A2ARouter {
 
     // ==================== Spring AI Alibaba 原生组件 ====================
     private final AgentCardProvider agentCardProvider;
-    private final RestClient.Builder restClientBuilder;
     private final ObjectMapper objectMapper;
 
-    // ==================== 配置 ====================
-    @Value("${a2a.timeout-seconds:30}")
-    private int timeoutSeconds;
-
-    // ==================== 缓存 ====================
-    private final Map<String, A2aRemoteAgent> remoteAgentCache = new ConcurrentHashMap<>();
+    private final RestClient.Builder restClientBuilder;
 
     @PostConstruct
     public void init() {
@@ -63,7 +47,6 @@ public class NacosA2ARouter implements A2ARouter {
     }
 
     // ==================== 核心路由方法 ====================
-
     @Override
     public A2AResponse routeMessage(A2AMessage message) {
         String targetAgentId = message.getReceiverAgentId();
