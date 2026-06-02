@@ -228,4 +228,49 @@ public class NacosA2ARouter implements A2ARouter {
                 ))
                 .build();
     }
+
+    /**
+     * 从 SSE 流式数据中提取最终完整文档
+     * @param sseData 子Agent返回的原始SSE字符串，格式如 "data:{...}\n\ndata:{...}\n\n..."
+     * @return 提取到的纯文本文档，如果提取失败则返回 null
+     */
+    public String extractFinalDocument(String sseData) {
+        if (sseData == null || sseData.isBlank()) return null;
+
+        // 按行分割 SSE 数据
+        String[] lines = sseData.split("\n");
+        String lastLargeText = null;
+
+        // 从后往前遍历，找到最后一个 artifact-update 中的大段文本
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String line = lines[i].trim();
+            if (line.startsWith("data:")) {
+                // 去掉 "data:" 前缀，得到 JSON 字符串
+                String json = line.substring(5).trim();
+                try {
+                    JsonNode node = objectMapper.readTree(json);
+                    JsonNode result = node.path("result");
+                    // 检查是否为 artifact-update 类型
+                    if ("artifact-update".equals(result.path("kind").asText())) {
+                        JsonNode parts = result.path("artifact").path("parts");
+                        if (parts.isArray() && parts.size() > 0) {
+                            String text = parts.get(0).path("text").asText();
+                            // 完整文档通常长度 > 200 字符，过滤掉小的片段
+                            if (text.length() > 200) {
+                                return text;
+                            }
+                            // 记录最后一个长文本（防止没有 >200 的）
+                            if (lastLargeText == null || text.length() > lastLargeText.length()) {
+                                lastLargeText = text;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // 忽略解析错误，继续处理下一行
+                }
+            }
+        }
+        // 没有找到符合长度要求的，返回最长的片段
+        return lastLargeText;
+    }
 }

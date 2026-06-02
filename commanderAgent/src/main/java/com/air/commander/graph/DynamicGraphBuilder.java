@@ -417,8 +417,15 @@ public class DynamicGraphBuilder {
             return result.getOrDefault(template.getMerge().getOutputKey(), "").toString();
         }
 
-        if ("A2A_DELEGATE".equals(template.getType()) && template.getMerge() != null) {
-          //todo 实现提取逻辑
+        // A2A委托模板：从 a2a_result 的 SSE 流中解析
+        if ("A2A_DELEGATE".equals(template.getType())) {
+            Object a2aResult = result.get("a2a_result");
+            if (a2aResult instanceof String rawSSEData) {
+                String document = a2aRouter.extractFinalDocument(rawSSEData);
+                if (document != null && !document.isBlank()) {
+                    return document;
+                }
+            }
         }
 
         // 默认整个结果转字符串
