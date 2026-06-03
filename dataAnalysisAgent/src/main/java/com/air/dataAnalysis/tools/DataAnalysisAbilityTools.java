@@ -1,11 +1,17 @@
 package com.air.dataAnalysis.tools;
 
+import com.air.dataAnalysis.entity.MultiDimensionResult;
+import com.air.dataAnalysis.entity.StatisticalSummary;
+import com.air.dataAnalysis.entity.TrendForecastResult;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * todo 这个还可以扩展更多的数据分析计算方法
+ */
 @Component
 public class DataAnalysisAbilityTools {
 
@@ -20,7 +26,7 @@ public class DataAnalysisAbilityTools {
             @ToolParam(description = "指标列表，如['sales', 'profit']") List<String> metrics,
             @ToolParam(description = "聚合函数，如'sum','avg','count'") String aggregation) {
         
-        // 模拟聚合逻辑（实际应使用OLAP或Pandas-like计算）
+        // 模拟聚合逻辑（实际应使用OLAP或Pandas-like计算）todo 完善实际逻辑
         Map<String, Map<String, Double>> result = new HashMap<>();
         for (Map<String, Object> row : dataset) {
             String dimKey = dimensions.stream()
@@ -50,7 +56,7 @@ public class DataAnalysisAbilityTools {
             @ToolParam(description = "预测周期数") int periods,
             @ToolParam(description = "预测模型（simple_moving_average, exponential_smoothing）") String model) {
         
-        // 简化：简单移动平均预测
+        // 简化：简单移动平均预测 todo 完善实际逻辑
         int window = 3;
         List<Double> predictions = new ArrayList<>();
         for (int i = 0; i < periods; i++) {
@@ -83,28 +89,4 @@ public class DataAnalysisAbilityTools {
         return new StatisticalSummary(mean, variance, stdDev, min, max, values.size());
     }
 
-    // 内部结果类（可单独提取为 dto）
-    public static class MultiDimensionResult {
-        public Map<String, Map<String, Double>> data;
-        public List<String> dimensions;
-        public List<String> metrics;
-        public String aggregation;
-        public MultiDimensionResult(Map<String, Map<String, Double>> data, List<String> dimensions, List<String> metrics, String aggregation) {
-            this.data = data; this.dimensions = dimensions; this.metrics = metrics; this.aggregation = aggregation;
-        }
-    }
-    public static class TrendForecastResult {
-        public List<Double> predictions;
-        public String model;
-        public double confidence;
-        public TrendForecastResult(List<Double> predictions, String model, double confidence) {
-            this.predictions = predictions; this.model = model; this.confidence = confidence;
-        }
-    }
-    public static class StatisticalSummary {
-        public double mean; public double variance; public double stdDev; public double min; public double max; public long count;
-        public StatisticalSummary(double mean, double variance, double stdDev, double min, double max, long count) {
-            this.mean = mean; this.variance = variance; this.stdDev = stdDev; this.min = min; this.max = max; this.count = count;
-        }
-    }
 }
