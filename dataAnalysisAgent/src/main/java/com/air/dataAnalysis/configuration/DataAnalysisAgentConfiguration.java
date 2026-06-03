@@ -9,7 +9,6 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -19,15 +18,14 @@ import org.springframework.context.annotation.Configuration;
 
 @Slf4j
 @Configuration
-@RequiredArgsConstructor
 public class DataAnalysisAgentConfiguration {
 
     private final ChatModelApiKeyConfig chatModelApiKeyConfig;
 
-    private final DataAnalysisMemoryTools dataAnalysisMemoryTools;
-    private final DataAnalysisAbilityTools dataAnalysisAbilityTools;
-
-    private final RemoteMcpToolProvider remoteMcpToolProvider;
+    // 手动构造器，只注入配置属性类
+    public DataAnalysisAgentConfiguration(ChatModelApiKeyConfig chatModelApiKeyConfig) {
+        this.chatModelApiKeyConfig = chatModelApiKeyConfig;
+    }
 
     @Bean
     public DashScopeApi dashScopeApi() {
@@ -53,11 +51,16 @@ public class DataAnalysisAgentConfiguration {
      * ReactAgent Bean —— A2A 注册核心
      */
     @Bean(name = "data-analysis-agent")
-    public ReactAgent dataAnalysisAgent(ChatModel chatModel) {
+    public ReactAgent dataAnalysisAgent(
+            ChatModel chatModel,
+            DataAnalysisMemoryTools dataAnalysisMemoryTools,
+            DataAnalysisAbilityTools dataAnalysisAbilityTools,
+            RemoteMcpToolProvider remoteMcpToolProvider
+    ) {
 
         // 将自己内部服务的工具对象包装为 ToolCallbackProvider
         ToolCallbackProvider dataAnalysisAgentToolProvider = MethodToolCallbackProvider.builder()
-                .toolObjects(dataAnalysisMemoryTools,dataAnalysisAbilityTools)
+                .toolObjects(dataAnalysisMemoryTools, dataAnalysisAbilityTools)
                 .build();
 
         return ReactAgent.builder()
@@ -71,7 +74,7 @@ public class DataAnalysisAgentConfiguration {
                         1. **多维度分析**：调用 multiDimensionAnalysis 工具对数据进行切片和钻取
                         2. **趋势预测**：调用 trendForecast 工具基于历史数据预测未来
                         3. **统计摘要**：调用 statisticalSummary 工具计算基本统计量
-
+                        
                         ## 工作流程
                         当你收到数据分析任务时，请按以下步骤执行：
                         1. 调用 getProfile 获取用户画像，了解用户的行业和分析偏好
@@ -79,7 +82,7 @@ public class DataAnalysisAgentConfiguration {
                         3. 调用 searchKnowledge 搜索相关知识库中的分析模板或案例
                         4. 根据任务类型选择合适的分析工具执行分析
                         5. 用自然语言组织分析结果，包含结论和业务建议
-
+                        
                         ## 注意事项
                         - 如果用户未明确指定维度，默认使用时间维度 + 地区维度
                         - 预测时需注明置信区间和模型假设

@@ -10,7 +10,6 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -20,16 +19,14 @@ import org.springframework.context.annotation.Configuration;
 
 @Slf4j
 @Configuration
-@RequiredArgsConstructor
 public class CodeReviewAgentConfiguration {
 
     private final ChatModelApiKeyConfig chatModelApiKeyConfig;
 
-    private final CodeReviewMemoryTools codeReviewMemoryTools;
-    private final CodeAnalysisAbilityTools codeAnalysisAbilityTools;
-    private final GitDiffTools gitDiffTools;
-
-    private final RemoteMcpToolProvider remoteMcpToolProvider;
+    // 手动构造器，只注入配置属性类
+    public CodeReviewAgentConfiguration(ChatModelApiKeyConfig chatModelApiKeyConfig) {
+        this.chatModelApiKeyConfig = chatModelApiKeyConfig;
+    }
 
     @Bean
     public DashScopeApi dashScopeApi() {
@@ -55,7 +52,13 @@ public class CodeReviewAgentConfiguration {
      * ReactAgent Bean —— A2A 注册核心
      */
     @Bean(name = "code-review-agent")
-    public ReactAgent codeReviewAgent(ChatModel chatModel) {
+    public ReactAgent codeReviewAgent(
+            ChatModel chatModel,
+            CodeReviewMemoryTools codeReviewMemoryTools,
+            CodeAnalysisAbilityTools codeAnalysisAbilityTools,
+            GitDiffTools gitDiffTools,
+            RemoteMcpToolProvider remoteMcpToolProvider
+    ) {
 
         // 将自己内部服务的工具对象包装为 ToolCallbackProvider
         ToolCallbackProvider codeReviewAgentToolProvider = MethodToolCallbackProvider.builder()

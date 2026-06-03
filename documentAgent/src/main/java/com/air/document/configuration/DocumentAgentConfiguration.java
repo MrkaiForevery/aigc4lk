@@ -8,7 +8,6 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -18,12 +17,14 @@ import org.springframework.context.annotation.Configuration;
 
 @Slf4j
 @Configuration
-@RequiredArgsConstructor
 public class DocumentAgentConfiguration {
 
     private final ChatModelApiKeyConfig chatModelApiKeyConfig;
-    private final DocumentMemoryTools documentMemoryTools;
-    private final RemoteMcpToolProvider remoteMcpToolProvider;
+
+    // 手动构造器，只注入配置属性类
+    public DocumentAgentConfiguration(ChatModelApiKeyConfig chatModelApiKeyConfig) {
+        this.chatModelApiKeyConfig = chatModelApiKeyConfig;
+    }
 
     @Bean
     public DashScopeApi dashScopeApi() {
@@ -49,7 +50,11 @@ public class DocumentAgentConfiguration {
      * ReactAgent Bean —— A2A 注册核心
      */
     @Bean(name = "document-agent")
-    public ReactAgent documentAgent(ChatModel chatModel) {
+    public ReactAgent documentAgent(
+            ChatModel chatModel,
+            DocumentMemoryTools documentMemoryTools,
+            RemoteMcpToolProvider remoteMcpToolProvider
+    ) {
 
         // 将自己内部服务的工具对象包装为 ToolCallbackProvider
         ToolCallbackProvider documentToolProvider = MethodToolCallbackProvider.builder()

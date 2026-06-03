@@ -25,6 +25,8 @@
         <module>documentAgent</module>
         <module>dataAnalysisAgent</module>
         <module>codeReviewAgent</module>
+        <module>customerServiceAgent</module>
+        <module>imageAnalysisAgent</module>
     </modules>
 
     <properties>
