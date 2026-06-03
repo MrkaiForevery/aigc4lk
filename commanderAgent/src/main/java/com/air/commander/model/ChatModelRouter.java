@@ -25,7 +25,7 @@ public class ChatModelRouter {
     private final ChatModelRoutingConfig chatModelRoutingConfig;
 
     /**
-     * 选择最佳模型
+     * 根据意图，选择最佳模型
      */
     public ModelSelection selectModel(IntentAnalysis intent) {
         // 1. 根据复杂度选择模型ID

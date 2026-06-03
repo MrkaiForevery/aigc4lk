@@ -25,7 +25,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class DocumentAgentTools {
+public class DocumentMemoryTools {
 
     private final MemoryIdentityFeign memoryIdentityFeign;
     private final MemoryProfileFeign memoryProfileFeign;

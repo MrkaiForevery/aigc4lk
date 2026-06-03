@@ -7,11 +7,8 @@ spring:
   config:
     import:
       - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
-      - nacos:document-mcp-config.yaml?refreshEnabled=true&group=DOCUMENT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:document-agent-remote-mcp.yaml?refreshEnabled=true&group=DOCUMENT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
   cloud:
-#    loadbalancer:
-#      ribbon:
-#        enabled: false
     nacos:
       # Nacos 服务发现配置
       discovery:
@@ -104,6 +101,17 @@ spring:
     mcp:
       client:
         enabled: false  # 禁用 MCP 客户端自动配置 todo 临时禁止
+        request-timeout: 30s
+
+# Feign 配置（调用 Memory Service）
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+  circuitbreaker:
+    enabled: true
 
 logging:
   level:

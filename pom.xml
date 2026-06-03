@@ -23,6 +23,7 @@
         <module>sharedMemoryServices</module>
         <module>sharedMemoryServiceApi</module>
         <module>documentAgent</module>
+        <module>dataAnalysisAgent</module>
     </modules>
 
     <properties>

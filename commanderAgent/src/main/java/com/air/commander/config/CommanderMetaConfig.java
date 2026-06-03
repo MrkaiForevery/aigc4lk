@@ -30,16 +30,11 @@ public class CommanderMetaConfig {
     private boolean multimodalEnabled = true;
 
     /**
-     * 场景到架构的映射（用于架构选择器）
-     */
-    private Map<String, String> scenarioArchitectureMapping = new HashMap<>();
-    /**
      * 复杂度到模型的映射（用于模型路由器）
      */
     private Map<String, String> complexityModelMapping = new HashMap<>();
 
     // ========== 新增：动态 Graph 编排相关 ==========
-
     /**
      * 场景到 Graph 模板的映射
      * 根据 IntentClassifier 输出的 scenario 选择对应的 Graph 模板 ID

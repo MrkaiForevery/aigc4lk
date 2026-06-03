@@ -43,7 +43,7 @@ public class CommanderAgent {
         String sessionId = request.getSessionId() != null ? request.getSessionId() : "default";
         String threadId = userId + "::" + sessionId;
 
-        // 同步：意图识别、模板选择、模型选择
+        // 意图识别、模板选择、模型选择
         IntentAnalysis intent = intentClassifier.analyzeIntent(request.getUserInput(), sessionId, userId);
         String templateId = templateSelector.selectTemplate(intent);
         ModelSelection model = chatModelRouter.selectModel(intent);

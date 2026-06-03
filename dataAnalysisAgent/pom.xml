@@ -10,10 +10,10 @@
     </parent>
 
     <groupId>com.air</groupId>
-    <artifactId>documentAgent</artifactId>
+    <artifactId>dataAnalysisAgent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>documentAgent</name>
-    <description>documentAgent</description>
+    <name>dataAnalysisAgent</name>
+    <description>dataAnalysisAgent</description>
 
     <properties>
         <java.version>17</java.version>
@@ -51,12 +51,6 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-client</artifactId>
-        </dependency>
-
-        <!-- 如果使用 Streamable HTTP 通信模式 -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-client-webflux</artifactId>
         </dependency>
 
         <!--############################## nacos ###########################-->

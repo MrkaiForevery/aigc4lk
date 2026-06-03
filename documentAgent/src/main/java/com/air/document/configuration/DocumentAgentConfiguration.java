@@ -1,7 +1,8 @@
 package com.air.document.configuration;
 
 import com.air.document.config.ChatModelApiKeyConfig;
-import com.air.document.tools.DocumentAgentTools;
+import com.air.document.mcp.RemoteMcpToolProvider;
+import com.air.document.tools.DocumentMemoryTools;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
@@ -15,15 +16,14 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.List;
-
 @Slf4j
 @Configuration
 @RequiredArgsConstructor
 public class DocumentAgentConfiguration {
 
     private final ChatModelApiKeyConfig chatModelApiKeyConfig;
-    private final DocumentAgentTools documentAgentTools;
+    private final DocumentMemoryTools documentMemoryTools;
+    private final RemoteMcpToolProvider remoteMcpToolProvider;
 
     @Bean
     public DashScopeApi dashScopeApi() {
@@ -49,11 +49,11 @@ public class DocumentAgentConfiguration {
      * ReactAgent Bean —— A2A 注册核心
      */
     @Bean(name = "document-agent")
-    public ReactAgent documentAgent(ChatModel chatModel, ToolCallbackProvider mcpToolProvider) {
+    public ReactAgent documentAgent(ChatModel chatModel) {
 
         // 将自己内部服务的工具对象包装为 ToolCallbackProvider
         ToolCallbackProvider documentToolProvider = MethodToolCallbackProvider.builder()
-                .toolObjects(documentAgentTools)
+                .toolObjects(documentMemoryTools)
                 .build();
 
         return ReactAgent.builder()
@@ -88,7 +88,7 @@ public class DocumentAgentConfiguration {
                         - 不要在回复中询问用户"是否继续"或"请提供更多信息"
                         - 不要解释你做了什么工具调用，直接输出文档内容
                         """)
-                .toolCallbackProviders(documentToolProvider, mcpToolProvider)   // 注入工具类
+                .toolCallbackProviders(documentToolProvider, remoteMcpToolProvider)   // 注入工具类
                 .saver(new MemorySaver())
                 .build();
     }

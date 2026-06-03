@@ -1,0 +1,100 @@
+server:
+  port: 12200
+
+spring:
+  application:
+    name: aigc4lk-data-analysis-agent
+  config:
+    import:
+      - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:data-analysis-agent-remote-mcp.yaml?refreshEnabled=true&group=DATA_ANALYSIS_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+  cloud:
+    nacos:
+      # Nacos 服务发现配置
+      discovery:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        username: aigc4lk
+        password: 123456
+      # Nacos 配置中心配置
+      config:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        group: DATA_ANALYSIS_GROUP
+        username: aigc4lk
+        password: 123456
+        cluster-name: aigc4lk-data-analysis-agent-service-cluster
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+    alibaba:
+      a2a:
+        nacos:
+          server-addr: 127.0.0.1:8848
+          namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+          username: aigc4lk
+          password: 123456
+          registry:
+            enabled: true
+          discovery:
+            enabled: true
+        server:
+          version: 0.0.1
+          card:
+            name: data-analysis-agent
+            description: 数据分析智能体，支持多维度分析、趋势预测、统计洞察
+            skills:
+              - id: multi_dimension_analysis
+                name: 多维度分析
+                description: 根据用户需求从多个维度（时间、地区、产品等）分析数据
+                tags:
+                  - analysis
+                  - multi-dimension
+                examples:
+                  - 分析一下今年的销售数据
+                  - 做一份公司的财务分析报表数据
+
+              - id: trend_forecast
+                name: 趋势预测
+                description: 基于历史数据预测未来趋势
+                tags:
+                  - forecast
+                  - trend
+                examples:
+                  - 基于往年的数据，预测一下我们公司今年下半年的销售额
+
+              - id: statistical_summary
+                name: 统计摘要
+                description: 提供数据集的均值、方差、分布等统计信息
+                tags:
+                  - statistics
+                  - summary
+                examples:
+                  - 将这个销售数据做成统计报表，要求包括均值，方差等重要统计信息
+
+            provider:
+              name: lk
+              organization: "air.com"
+              url: "https://www.air.com"
+    mcp:
+      client:
+        enabled: false  # 禁用 MCP 客户端自动配置 todo 临时禁止
+        request-timeout: 30s
+
+# Feign 配置（调用 Memory Service）
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+  circuitbreaker:
+    enabled: true
+
+logging:
+  level:
+    com.alibaba.cloud.ai.graph: DEBUG
+    com.alibaba.cloud.ai.agent: DEBUG
+    com.alibaba.cloud.ai.a2a: DEBUG
+    org.springframework.ai: DEBUG
+    com.air.document: DEBUG
