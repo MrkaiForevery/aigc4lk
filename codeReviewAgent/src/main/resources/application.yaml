@@ -1,0 +1,99 @@
+server:
+  port: 12300
+
+spring:
+  application:
+    name: aigc4lk-code-review-agent
+  config:
+    import:
+      - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:code-review-agent-remote-mcp.yaml?refreshEnabled=true&group=CODE_REVIEW_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+  cloud:
+    nacos:
+      # Nacos 服务发现配置
+      discovery:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        username: aigc4lk
+        password: 123456
+      # Nacos 配置中心配置
+      config:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        group: CODE_REVIEW_GROUP
+        username: aigc4lk
+        password: 123456
+        cluster-name: aigc4lk-code-review-agent-service-cluster
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+    alibaba:
+      a2a:
+        nacos:
+          server-addr: 127.0.0.1:8848
+          namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+          username: aigc4lk
+          password: 123456
+          registry:
+            enabled: true
+          discovery:
+            enabled: true
+        server:
+          version: 0.0.1
+          card:
+            name: code-review-agent
+            description: 代码审查智能体，支持代码质量分析、安全漏洞检测、编码规范检查
+            skills:
+              - id: code_quality_analysis
+                name: 代码质量分析
+                description: 分析代码复杂度、可维护性、重复代码等
+                tags:
+                  - quality
+                  - analysis
+                examples:
+                  - 这段代码的质量怎么样
+
+              - id: security_vulnerability_detection
+                name: 安全漏洞检测
+                description: 检测SQL注入、XSS、硬编码密钥等安全风险
+                tags:
+                  - security
+                  - vulnerability
+                examples:
+                  - 这段代码有没有安全漏洞
+
+              - id: coding_standard_check
+                name: 编码规范检查
+                description: 检查命名规范、注释规范、格式规范等
+                tags:
+                  - standard
+                  - lint
+                examples:
+                  - 这个新提交的代码是否符合公司的代码编写规范
+
+            provider:
+              name: lk
+              organization: "air.com"
+              url: "https://www.air.com"
+    mcp:
+      client:
+        enabled: false  # 禁用 MCP 客户端自动配置 todo 临时禁止
+        request-timeout: 30s
+
+# Feign 配置（调用 Memory Service）
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+  circuitbreaker:
+    enabled: true
+
+logging:
+  level:
+    com.alibaba.cloud.ai.graph: DEBUG
+    com.alibaba.cloud.ai.agent: DEBUG
+    com.alibaba.cloud.ai.a2a: DEBUG
+    org.springframework.ai: DEBUG
+    com.air.document: DEBUG

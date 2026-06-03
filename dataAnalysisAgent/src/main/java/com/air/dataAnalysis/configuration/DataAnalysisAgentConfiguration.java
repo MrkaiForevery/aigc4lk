@@ -23,6 +23,7 @@ import org.springframework.context.annotation.Configuration;
 public class DataAnalysisAgentConfiguration {
 
     private final ChatModelApiKeyConfig chatModelApiKeyConfig;
+
     private final DataAnalysisMemoryTools dataAnalysisMemoryTools;
     private final DataAnalysisAbilityTools dataAnalysisAbilityTools;
 

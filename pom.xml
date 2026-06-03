@@ -24,6 +24,7 @@
         <module>sharedMemoryServiceApi</module>
         <module>documentAgent</module>
         <module>dataAnalysisAgent</module>
+        <module>codeReviewAgent</module>
     </modules>
 
     <properties>
