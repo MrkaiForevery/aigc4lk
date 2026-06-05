@@ -1,182 +1,139 @@
 package com.air.commander.intent;
 
-import com.air.api.dto.PreferenceMemoryDTO;
-import com.air.api.dto.ProfileMemoryDTO;
-import com.air.api.feignClient.MemoryPreferenceFeign;
-import com.air.api.feignClient.MemoryProfileFeign;
-import com.air.api.feignClient.MemorySessionFeign;
-import com.air.commander.entity.IntentAnalysis;
+import com.air.commander.configloader.loader.RemoteConfigLoader;
+import com.air.commander.model.IntentResult;
+import com.air.commander.model.MemoryContext;
+import com.air.commander.resilience.ResilienceManager;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class IntentClassifier {
 
-    private final ChatClient intentClient;
-    private final ObjectMapper objectMapper =  new ObjectMapper();
+    private final RemoteConfigLoader configLoader;
+    private final ChatClient chatClient;
+    private final ResilienceManager resilienceManager;
+    private final ObjectMapper objectMapper;
 
-    private final MemorySessionFeign memorySessionFeign;
-    private final MemoryProfileFeign memoryProfileFeign;
-    private final MemoryPreferenceFeign memoryPreferenceFeign;
+    public IntentClassifier(RemoteConfigLoader configLoader,
+                            @Qualifier("fastModelClient") ChatClient fastchatClient,
+                            ResilienceManager resilienceManage
+    ) {
+        this.configLoader = configLoader;
+        this.chatClient = fastchatClient;
+        this.resilienceManager = resilienceManage;
+        this.objectMapper = new ObjectMapper();
+    }
 
     /**
-     * 分析用户意图
+     * 对用户输入进行意图分类
+     * @param userInput    原始用户输入
+     * @param memoryContext 当前会话的记忆上下文（已通过 threadId 隔离）
+     * @return 意图结果，包含是否匹配模板、场景标识、模板ID、复杂度
      */
-    public IntentAnalysis analyzeIntent(String userInput,String sessionId, String userId) {
-        log.debug("Analyzing intent for input: {}", truncate(userInput, 200));
-        // 1. 加载会话记忆（第一层，必定加载）
-        List<String> sessionHistory = new ArrayList<>();
-        Optional.ofNullable(sessionId)
-                .map(id -> memorySessionFeign.summarizeSession(id, userId))
-                .ifPresentOrElse(sessionHistory::add,
-                        () ->log.warn("Failed to load sessionHistory for sessionId={}",sessionId)
-                );
-
-        // 2. 加载用户画像（第二层，按需加载）
-        ProfileMemoryDTO profile = null;
-        PreferenceMemoryDTO preference = null;
-        if (userId != null) {
-            try {
-                profile = memoryProfileFeign.getProfile(userId);
-                preference = memoryPreferenceFeign.getPreference(userId);
-            } catch (Exception e) {
-                log.warn("Failed to load profile/preference for userId={}", userId);
+    public IntentResult classify(String userInput, MemoryContext memoryContext) {
+        // 1. 硬规则匹配（基于可热更新的规则配置）
+        for (RemoteConfigLoader.IntentRule rule : configLoader.getIntentRules()) {
+            if (rule.matches(userInput)) {
+                String templateId = configLoader.getScenarioToTemplateId().get(rule.scenario());
+                if (templateId != null) {
+                    log.debug("硬规则匹配成功: scenario={}, templateId={}", rule.scenario(), templateId);
+                    return new IntentResult(true, rule.scenario(), templateId, rule.complexity());
+                }
             }
         }
 
-        // 3. 构建增强的 Prompt
-        String enhancedPrompt = buildEnhancedPrompt(userInput, sessionHistory, profile, preference);
-        
-        try {
-            //调用大模型进行意图分析
-            String response = intentClient.prompt()
-                    .user(enhancedPrompt)
-                    .call()
-                    .content();
+        // 2. 硬规则未匹配，使用轻量级 LLM 分类，并注入记忆上下文
+        log.debug("硬规则未匹配，启动 LLM 意图分类");
+        String prompt = buildClassificationPrompt(userInput, memoryContext);
+        String llmOutput = resilienceManager.executeWithFullProtection(
+                "llm-fast-model",
+                () -> chatClient.prompt(prompt).call().content(),
+                () -> fallbackLlmOutput()
+        );
 
-            // 清理响应，提取JSON
-            String jsonStr = extractJson(response);
-            Map<String, Object> result = objectMapper.readValue(jsonStr, Map.class);
-            
-            IntentAnalysis analysis = IntentAnalysis.builder()
-                .scenario(getString(result, "scenario", "GENERAL"))
-                .complexity(getString(result, "complexity", "MEDIUM"))
-                .requiredCapabilities(getList(result, "required_capabilities", List.of("CHAT")))
-                .modality(getString(result, "modality", "TEXT"))
-                .confidence(getDouble(result, "confidence", 0.5))
-                .build();
-            
-            log.info("Intent analysis result: scenario={}, complexity={}, modality={}, confidence={}",
-                analysis.getScenario(), analysis.getComplexity(), 
-                analysis.getModality(), analysis.getConfidence());
-            
-            return analysis;
-            
-        } catch (Exception e) {
-            log.error("Intent analysis failed, using defaults", e);
-            // 返回默认意图
-            return IntentAnalysis.builder()
-                .scenario("GENERAL")
-                .complexity("MEDIUM")
-                .requiredCapabilities(List.of("CHAT"))
-                .modality("TEXT")
-                .confidence(0.3)
-                .build();
+        // 3. 解析 LLM 返回的 JSON
+        try {
+            Map<String, Object> responseMap = objectMapper.readValue(llmOutput, Map.class);
+            boolean predefined = Boolean.TRUE.equals(responseMap.get("predefined"));
+            int complexity = responseMap.containsKey("complexity") ?
+                    ((Number) responseMap.get("complexity")).intValue() : 3;
+
+            if (predefined && responseMap.containsKey("scenario")) {
+                String scenario = (String) responseMap.get("scenario");
+                String templateId = configLoader.getScenarioToTemplateId().get(scenario);
+                if (templateId != null) {
+                    log.info("LLM 匹配到预定义场景: scenario={}, templateId={}", scenario, templateId);
+                    return new IntentResult(true, scenario, templateId, complexity);
+                }
+            }
+            // 未匹配到预定义场景，走动态编排
+            log.info("LLM 判断为非预定义场景，使用动态编排, complexity={}", complexity);
+            return new IntentResult(false, null, null, complexity);
+
+        } catch (JsonProcessingException e) {
+            log.error("解析 LLM 意图分类结果失败, 降级为动态编排", e);
+            return new IntentResult(false, null, null, 3);
         }
     }
 
-    private String buildEnhancedPrompt(String userInput,
-                                       List<String> sessionHistory,
-                                       ProfileMemoryDTO profile,
-                                       PreferenceMemoryDTO preference) {
+    /**
+     * 构建包含记忆上下文的分类 Prompt
+     */
+    private String buildClassificationPrompt(String userInput, MemoryContext ctx) {
         StringBuilder sb = new StringBuilder();
-        sb.append("请分析以下用户输入的意图：\n\n");
+        sb.append("你是一个意图分类助手。请根据以下信息判断用户请求属于哪个预定义场景。\n\n");
 
-        // 会话上下文（如果有）
-        if (sessionHistory != null && !sessionHistory.isEmpty()) {
-            sb.append("## 历史对话上下文\n");
-            for (String msg : sessionHistory) {
-                sb.append(msg).append("\n");
-            }
+        // 可用的预定义场景列表（从配置中动态获取）
+        sb.append("=== 预定义场景列表 ===\n");
+        configLoader.getScenarioToTemplateId().keySet().forEach(scenario ->
+                sb.append("- ").append(scenario).append("\n")
+        );
+        sb.append("\n");
+
+        // 用户画像
+        if (ctx.getUserProfile() != null && !ctx.getUserProfile().isEmpty()) {
+            sb.append("=== 用户画像 ===\n");
+            sb.append(ctx.getUserProfile()).append("\n\n");
+        }
+
+        // 用户偏好
+        if (ctx.getPreferences() != null && !ctx.getPreferences().isEmpty()) {
+            sb.append("=== 用户偏好 ===\n");
+            sb.append(ctx.getPreferences()).append("\n\n");
+        }
+
+        // 最近对话（仅取最近10条，既提供上下文又避免 token 过长）
+        if (ctx.getRecentMessages() != null && !ctx.getRecentMessages().isEmpty()) {
+            sb.append("=== 最近对话 ===\n");
+            ctx.getRecentMessages().stream()
+                    .skip(Math.max(0, ctx.getRecentMessages().size() - 10))
+                    .forEach(msg -> sb.append("- ").append(msg.get("role"))
+                            .append(": ").append(msg.get("content")).append("\n"));
             sb.append("\n");
         }
 
-        // 用户画像（如果有）
-        if (profile != null) {
-            sb.append("## 用户画像\n");
-            sb.append("- 技术等级：").append(profile.getTechnicalLevel()).append("\n");
-            sb.append("- 兴趣领域：").append(profile.getTopicsOfInterest()).append("\n");
-            sb.append("- 沟通风格：").append(profile.getCommunicationStyle()).append("\n\n");
-        }
-
-        // 用户偏好（如果有）
-        if (preference != null) {
-            sb.append("## 用户偏好\n");
-            sb.append("- 输出风格：").append(preference.getOutputStyle()).append("\n\n");
-        }
-
-        // 当前输入
-        sb.append("## 当前用户输入\n");
+        // 当前请求
+        sb.append("=== 当前用户请求 ===\n");
         sb.append(userInput).append("\n\n");
 
-        sb.append("请以JSON格式返回结果。");
+        // 输出格式要求
+        sb.append("请以 JSON 格式返回（不要包含其他内容）：\n");
+        sb.append("{ \"predefined\": true/false, \"scenario\": \"场景标识（仅predefined=true时必填）\", \"complexity\": 1-5 }");
         return sb.toString();
     }
 
     /**
-     * 从LLM响应中提取JSON
+     * LLM 调用失败时的兜底输出
      */
-    private String extractJson(String response) {
-        if (response == null || response.isEmpty()) {
-            return "{}";
-        }
-        
-        // 尝试提取```json ... ```块
-        int jsonStart = response.indexOf("{");
-        int jsonEnd = response.lastIndexOf("}");
-        
-        if (jsonStart >= 0 && jsonEnd > jsonStart) {
-            return response.substring(jsonStart, jsonEnd + 1);
-        }
-        
-        return "{}";
-    }
-
-    private String getString(Map<String, Object> map, String key, String defaultValue) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : defaultValue;
-    }
-
-    private double getDouble(Map<String, Object> map, String key, double defaultValue) {
-        Object value = map.get(key);
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
-        }
-        return defaultValue;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> getList(Map<String, Object> map, String key, List<String> defaultValue) {
-        Object value = map.get(key);
-        if (value instanceof List) {
-            return (List<String>) value;
-        }
-        return defaultValue;
-    }
-
-    private String truncate(String text, int maxLength) {
-        if (text == null || text.length() <= maxLength) return text;
-        return text.substring(0, maxLength) + "...";
+    private String fallbackLlmOutput() {
+        return "{\"predefined\": false, \"complexity\": 3}";
     }
 }

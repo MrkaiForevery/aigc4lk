@@ -1,6 +1,6 @@
 package com.air.commander.log;
 
-import com.air.commander.config.LoggingConfig;
+import com.air.commander.configloader.properties.LoggingProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +19,7 @@ import java.util.Map;
 public class LoggingLevelRefresher {
 
     private final LoggingSystem loggingSystem;
-    private final LoggingConfig loggingConfig;
+    private final LoggingProperties loggingProperties;
 
     @PostConstruct
     public void init() {
@@ -27,7 +27,7 @@ public class LoggingLevelRefresher {
     }
 
     private void refreshLoggingLevels() {
-        Map<String, String> levels = loggingConfig.getLevel();
+        Map<String, String> levels = loggingProperties.getLevel();
         if (levels != null) {
             levels.forEach((packageName, level) -> {
                 try {

@@ -1,4 +1,4 @@
-package com.air.commander.config;
+package com.air.commander.configloader.properties;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -9,7 +9,7 @@ import java.util.Map;
 @Data
 @RefreshScope
 @ConfigurationProperties(prefix = "logging")
-public class LoggingConfig {
+public class LoggingProperties {
     private Map<String, String> level;
     private Map<String, String> pattern;
 }

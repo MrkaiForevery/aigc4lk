@@ -6,6 +6,7 @@ import com.air.platform.common.a2a.protocol.A2AResponse;
 import com.air.platform.common.multimodal.vo.AgentInstance;
 import com.air.platform.common.multimodal.vo.AgentMetadata;
 import com.air.platform.common.enums.ModalityType;
+import com.alibaba.cloud.ai.a2a.registry.nacos.discovery.NacosAgentCardProvider;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardProvider;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 
@@ -36,7 +37,7 @@ import java.util.Optional;
 public class NacosA2ARouter implements A2ARouter {
 
     // ==================== Spring AI Alibaba 原生组件 ====================
-    private final AgentCardProvider agentCardProvider;
+    private final NacosAgentCardProvider agentCardProvider;
     private final ObjectMapper objectMapper;
 
     private final RestClient.Builder restClientBuilder;

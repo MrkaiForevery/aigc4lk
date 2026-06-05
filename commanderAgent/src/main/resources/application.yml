@@ -7,7 +7,8 @@ spring:
     import:
       - nacos:platform-commander-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:platform-model-routing-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
-      - nacos:commander-graph-templates.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:graph-templates.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:intent-rules.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:comander-resilience4j.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:commander-chroma-vectorstore-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
@@ -53,6 +54,63 @@ spring:
     model:
       embedding: dashscope
 
+seata:
+  # 注册中心和配置中心均使用 file 模式（与你的 Server 端保持一致）
+  registry:
+    type: file
+  config:
+    type: file
+  # 客户端的事务分组（必须与 vgroupMapping 的 key 一致）
+  tx-service-group: agent-tx-group
+  service:
+    # 事务分组映射：将 agent-tx-group 映射到 default 服务组
+    vgroup-mapping:
+      agent-tx-group: default
+    # 服务组 default 对应的 Seata Server 地址列表（多个用逗号分隔）
+    grouplist:
+      default: 127.0.0.1:8091   # Seata Server 的地址，端口默认 8091
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      agent-data-analysis-agent:
+        base-config: default
+      agent-document-agent:
+        base-config: default
+      chroma-case:
+        failure-rate-threshold: 30
+      llm-fast-model:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 20s
+      llm-reasoning-model:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+      seata-tc:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+  ratelimiter:
+    instances:
+      llm-api:
+        limit-for-period: 50
+        limit-refresh-period: 1s
+        timeout-duration: 5s
+  bulkhead:
+    instances:
+      parallel-execution:
+        max-concurrent-calls: 10
+        max-wait-duration: 5s
+  timelimiter:
+    instances:
+      a2a-call:
+        timeout-duration: 30s
+      llm-call:
+        timeout-duration: 10s
 
 logging:
   level:
@@ -73,3 +131,11 @@ springdoc:
     title: Commander API
     description: 企业级智能编排平台 - Commander 服务接口
     version: 1.0.0
+
+redisson:
+  singleServerConfig:
+    address: "redis://localhost:6379"
+    # password: 你的密码（如果没有则删除该行）
+    # database: 0
+    connectionMinimumIdleSize: 5
+    connectionPoolSize: 10
