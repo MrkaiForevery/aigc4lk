@@ -5,8 +5,6 @@ spring:
     name: aigc4lk-commander-agent
   config:
     import:
-      - nacos:platform-commander-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
-      - nacos:platform-model-routing-config.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:graph-templates.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:intent-rules.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:comander-resilience4j.yaml?refreshEnabled=true&group=COMMANDER_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
