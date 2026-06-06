@@ -7,6 +7,7 @@ import org.redisson.spring.starter.RedissonAutoConfigurationCustomizer;
 
 @Configuration
 public class RedissonConfig {
+
     @Bean
     public RedissonAutoConfigurationCustomizer redissonCustomizer() {
         return config -> {
@@ -14,4 +15,5 @@ public class RedissonConfig {
             config.setCodec(new JsonJacksonCodec());
         };
     }
+
 }

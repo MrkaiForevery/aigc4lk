@@ -22,11 +22,17 @@ import java.util.Map;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class InterruptHandler {
 
     private final RedissonClient redissonClient;
     private final CredentialService credentialService;
+
+    public InterruptHandler(CredentialService credentialService,
+                            RedissonClient redissonClient) {
+        this.credentialService = credentialService;
+        this.redissonClient = redissonClient;
+    }
+
 
     /**
      * 挂起全局事务并保存中断上下文到 Redis
