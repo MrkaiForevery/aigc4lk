@@ -48,6 +48,8 @@ public class HybridOrchestrator {
             plan = dynamicOrchestrator.generatePlan(userInput, memoryCtx);
         }
 
+
+
         String xid = RootContext.getXID();
         List<ExecutionResult> results = graphExecutor.execute(plan, threadId, userId, tokens, xid, memoryCtx);
 
@@ -66,5 +68,7 @@ public class HybridOrchestrator {
                 .build();
     }
 
-    public record ExecuteRequest(String userId, String threadId, String input, Map<String, String> tokens) {}
+    public record ExecuteRequest(String userId, String threadId, String input, Map<String, String> tokens) {
+
+    }
 }

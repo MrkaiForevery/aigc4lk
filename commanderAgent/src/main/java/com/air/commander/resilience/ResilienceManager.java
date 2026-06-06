@@ -10,6 +10,7 @@ import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.timelimiter.TimeLimiter;
 import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.CompletableFuture;
@@ -20,6 +21,7 @@ import java.util.function.Supplier;
 /**
  * 多层级限流管理器
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ResilienceManager {
@@ -31,7 +33,7 @@ public class ResilienceManager {
 
     // TimeLimiter 内部超时调度使用自己的 ScheduledExecutorService，
     // 这里只需要一个执行业务逻辑的线程池（用于 CompletableFuture.supplyAsync）
-    private final ExecutorService asyncExecutor = Executors.newFixedThreadPool(10);
+    private final ExecutorService asyncExecutor = Executors.newFixedThreadPool(30);
 
     /**
      * 全防护装饰顺序：
@@ -67,7 +69,10 @@ public class ResilienceManager {
 
         // 3. 最后加上 Fallback
         Supplier<T> decorated = Decorators.ofSupplier(timedSupplier)
-                .withFallback(throwable -> fallback.get())
+                .withFallback(throwable -> {
+                    log.error("降级触发，异常类型: {}", throwable.getClass().getName());
+                    return fallback.get();
+                })
                 .decorate();
 
         return decorated.get();
@@ -77,8 +82,10 @@ public class ResilienceManager {
      * 仅 CircuitBreaker + TimeLimiter + Fallback:
      * 装饰顺序： Fallback( TimeLimiter( CircuitBreaker( Supplier ) ) )
      */
-    public <T> T executeWithCBAndTimeout(String cbName, String tlName,
-                                         Supplier<T> primary, Supplier<T> fallback) {
+    public <T> T executeWithCBAndTimeout(String cbName,
+                                         String tlName,
+                                         Supplier<T> primary,
+                                         Supplier<T> fallback) {
         CircuitBreaker cb = cbRegistry.circuitBreaker(cbName);
         TimeLimiter tl = tlRegistry.timeLimiter(tlName);
 

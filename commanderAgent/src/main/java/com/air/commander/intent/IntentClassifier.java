@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -110,14 +111,12 @@ public class IntentClassifier {
             sb.append(ctx.getPreferences()).append("\n\n");
         }
 
-        // 最近对话（仅取最近10条，既提供上下文又避免 token 过长）
+        // 仅取最近20条,在前面build这个ctx的时候就已经进行了条数处理
         if (ctx.getRecentMessages() != null && !ctx.getRecentMessages().isEmpty()) {
-            sb.append("=== 最近对话 ===\n");
-            ctx.getRecentMessages().stream()
-                    .skip(Math.max(0, ctx.getRecentMessages().size() - 10))
-                    .forEach(msg -> sb.append("- ").append(msg.get("role"))
-                            .append(": ").append(msg.get("content")).append("\n"));
-            sb.append("\n");
+            String recentMessages = ctx.getRecentMessages().stream()
+                    .map(msg -> "- " + msg.getRole() + ": " + msg.getContent())
+                    .collect(Collectors.joining("\n"));
+            sb.append("=== 最近对话 ===\n").append(recentMessages).append("\n\n");
         }
 
         // 当前请求

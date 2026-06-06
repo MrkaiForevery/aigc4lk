@@ -1,8 +1,6 @@
 package com.air.commander.conversation;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.air.commander.model.MemoryContext;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RList;
 import org.redisson.api.RedissonClient;
@@ -25,10 +23,10 @@ public class ConversationManager {
      */
     public void addMessage(String threadId, String role, String content) {
         String key = "conv:" + threadId;
-        RList<Message> list = redissonClient.getList(key);
+        RList<MemoryContext.Message> list = redissonClient.getList(key);
         
         // 添加消息对象（Redisson 自动将对象序列化为 JSON 存储）
-        list.add(new Message(role, content));
+        list.add(new MemoryContext.Message(role, content));
         
         // 如果超过最大消息数，只保留最近 MAX_MESSAGES 条（裁剪列表尾部）
         if (list.size() > MAX_MESSAGES) {
@@ -43,20 +41,11 @@ public class ConversationManager {
     /**
      * 获取指定 threadId 的最近 n 条消息
      */
-    public List<Message> getRecentMessages(String threadId, int n) {
+    public List<MemoryContext.Message> getRecentMessages(String threadId, int n) {
         String key = "conv:" + threadId;
-        RList<Message> list = redissonClient.getList(key);
+        RList<MemoryContext.Message> list = redissonClient.getList(key);
         
         // range 直接返回指定范围的 List<Message>，索引负数表示从尾部计算
         return list.range(-n, -1);
-    }
-
-    // ---------- 内部消息模型 ----------
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class Message {
-        private String role;
-        private String content;
     }
 }

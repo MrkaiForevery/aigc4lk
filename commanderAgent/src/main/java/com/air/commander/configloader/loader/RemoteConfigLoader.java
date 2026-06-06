@@ -31,7 +31,7 @@ public class RemoteConfigLoader {
     /**
      * 获取ChromaDb连接配置参数
      */
-    public ChromaDbClientProperties getChromaDbClientProperties(String key){
+    public ChromaDbClientProperties getChromaDbClientProperties(){
         return this.chromaDbClientProperties;
     }
 

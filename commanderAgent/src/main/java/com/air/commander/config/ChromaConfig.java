@@ -1,5 +1,6 @@
 package com.air.commander.config;
 
+import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.air.commander.configloader.properties.ChromaDbClientProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -17,13 +18,14 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class ChromaConfig {
 
-    private final ChromaDbClientProperties chromaDbClientProperties;
+    private final RemoteConfigLoader remoteConfigLoader;
 
     /**
      * 创建 ChromaApi Bean，用于与 ChromaDB 通信
      */
     @Bean
     public ChromaApi chromaApi(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
+        ChromaDbClientProperties chromaDbClientProperties = remoteConfigLoader.getChromaDbClientProperties();
         // 1. 构建 ChromaDB 连接 URL
         String host = chromaDbClientProperties.getClient().getHost();
         int port = chromaDbClientProperties.getClient().getPort();
@@ -46,6 +48,7 @@ public class ChromaConfig {
      */
     @Bean
     public ChromaVectorStore chromaVectorStore(ChromaApi chromaApi, EmbeddingModel embeddingModel) {
+        ChromaDbClientProperties chromaDbClientProperties = remoteConfigLoader.getChromaDbClientProperties();
         return ChromaVectorStore.builder(chromaApi, embeddingModel)
 //                .tenantName(chromaDbClientConfig.getTenantName())
 //                .databaseName(chromaDbClientConfig.getDatabaseName())

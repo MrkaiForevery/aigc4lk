@@ -4,10 +4,12 @@ import com.air.commander.a2a.BaseNacosA2ARouter;
 import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.Step;
 import com.air.commander.model.ValidationResult;
+import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 执行效果的的计划验证器
@@ -21,10 +23,15 @@ public class PlanValidator {
     public ValidationResult validate(OrchestrationPlan plan) {
         List<String> errors = new ArrayList<>();
         if (hasCycle(plan.getSteps())) errors.add("Cycle detected");
-        Set<String> agents = baseNacosA2ARouter.getAvailableAgents();
+        // 从 AgentCardWrapper 中提取 Agent 名称
+        Set<String> availableAgentNames = baseNacosA2ARouter.getAvailableAgents().stream()
+                .map(AgentCardWrapper::name)      // 假设 AgentCardWrapper 有 name() 或 getName()
+                .collect(Collectors.toSet());
+
         for (Step step : plan.getSteps()) {
-            if (step.getType() == Step.StepType.A2A_DELEGATE &&
-                    step.getAgent() != null && !agents.contains(step.getAgent())) {
+            if (step.getType() == Step.StepType.A2A_DELEGATE
+                    && step.getAgent() != null
+                    && !availableAgentNames.contains(step.getAgent())) {
                 errors.add("Agent not found: " + step.getAgent());
             }
         }

@@ -16,7 +16,12 @@ spring:
         namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
         username: aigc4lk
         password: 123456
-      # Nacos 配置中心配置
+        metadata:
+          is_relation_agent: true
+          #必须和注册的agentCard的name保持一致
+          relation_agent_Name: document-agent
+
+    # Nacos 配置中心配置
       config:
         server-addr: 127.0.0.1:8848
         namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a

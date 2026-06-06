@@ -20,6 +20,8 @@ spring:
         namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
         username: aigc4lk
         password: 123456
+        metadata:
+          is_relation_agent: false
       # Nacos 配置中心配置
       config:
         server-addr: 127.0.0.1:8848
@@ -73,42 +75,48 @@ resilience4j:
     configs:
       default:
         sliding-window-size: 10
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 70
+        wait-duration-in-open-state: 20s
         permitted-number-of-calls-in-half-open-state: 3
     instances:
-      agent-data-analysis-agent:
-        base-config: default
-      agent-document-agent:
-        base-config: default
       chroma-case:
-        failure-rate-threshold: 30
+        base-config: default
       llm-fast-model:
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 20s
+        base-config: default
       llm-reasoning-model:
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s
+        base-config: default
       seata-tc:
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 60s
+        base-config: default
+      a2a-call:
+        base-config: default
+      llm-step-call:
+        base-config: default
+
   ratelimiter:
     instances:
       llm-api:
         limit-for-period: 50
         limit-refresh-period: 1s
         timeout-duration: 5s
+
   bulkhead:
     instances:
       parallel-execution:
-        max-concurrent-calls: 10
-        max-wait-duration: 5s
+        max-concurrent-calls: 20
+        max-wait-duration: 10s
+
   timelimiter:
     instances:
+      llm-reasoning-model:
+        timeout-duration: 180s
+      llm-fast-model:
+        timeout-duration: 120s
+      llm-step-call:
+        timeout-duration: 300s
       a2a-call:
-        timeout-duration: 30s
+        timeout-duration: 600s
       llm-call:
-        timeout-duration: 10s
+        timeout-duration: 180s
 
 logging:
   level:

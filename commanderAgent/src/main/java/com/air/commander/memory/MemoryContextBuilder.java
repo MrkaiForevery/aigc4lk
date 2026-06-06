@@ -22,8 +22,9 @@ public class MemoryContextBuilder {
     private final ResilienceManager resilience;
 
     public MemoryContext build(String userId, String threadId, String userInput) {
-        List<Map<String, String>> recentMessages = (List<Map<String, String>>) resilience.executeWithCBAndTimeout(
-                "redis-session", "memory-query",
+        List<MemoryContext.Message> recentMessages = resilience.executeWithCBAndTimeout(
+                "redis-session",
+                "memory-query",
                 () -> conversationManager.getRecentMessages(threadId, 20),
                 () -> List.of()
         );
