@@ -1,5 +1,6 @@
 package com.air.commander.orchestrator;
 
+import com.air.commander.Prompt.PromptManagerBuilder;
 import com.air.commander.a2a.BaseNacosA2ARouter;
 import com.air.commander.interrupt.InterruptHandler;
 import com.air.commander.model.ExecutionResult;
@@ -15,8 +16,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +32,7 @@ public class GraphExecutor {
     private final ResilienceManager resilience;
 
     private final ObjectMapper objectMapper;
+    private final PromptManagerBuilder promptManagerBuilder;
 
     // 固定线程池，替代虚拟线程
     private final ExecutorService parallelExecutor;
@@ -43,14 +43,16 @@ public class GraphExecutor {
                          InterruptHandler interruptHandler,
                          GraphBuilder graphBuilder,
                          ResilienceManager resilience,
-                         ObjectMapper objectMapper) {
+                         ObjectMapper objectMapper,
+                         PromptManagerBuilder promptManagerBuilder) {
         this.a2aRouter = a2aRouter;
         this.easyChatClient = easyChatClient;
         this.interruptHandler = interruptHandler;
         this.graphBuilder = graphBuilder;
         this.resilience = resilience;
         this.objectMapper = objectMapper;
-        this.parallelExecutor = Executors.newFixedThreadPool( Runtime.getRuntime().availableProcessors());
+        this.promptManagerBuilder = promptManagerBuilder;
+        this.parallelExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }
 
 
@@ -76,15 +78,37 @@ public class GraphExecutor {
                                                     Map<String, String> tokens,
                                                     String xid,
                                                     MemoryContext memoryCtx) {
-        List<Step> ordered = graphBuilder.buildExecutionOrder(plan);
-        Map<String, Object> context = new ConcurrentHashMap<>();
+        List<Step> orderedSteps = graphBuilder.buildExecutionOrder(plan);
+        Map<String, Object> runtimeContext = new ConcurrentHashMap<>();
         List<ExecutionResult> results = new ArrayList<>();
-        for (Step step : ordered) {
-            ExecutionResult r = executeSingleStep(step, context, threadId, userId, tokens, xid, memoryCtx);
+
+        for (int i = 0; i < orderedSteps.size(); i++) {
+            Step step = orderedSteps.get(i);
+            ExecutionResult r = executeSingleStep(step, runtimeContext, threadId, userId, tokens, xid, memoryCtx);
             results.add(r);
-            if (r.getCommand() != null) break;
-            if (r.isSuccess()) context.put(step.getId() + ".output", r.getOutput());
-            if (!r.isSuccess() && step.isMandatory()) break;
+
+            // ============ 检查点逻辑 ============
+            if (r.getCommand() != null) {
+                // 情况1：遇到 INTERRUPT 步骤，创建检查点并暂停
+                log.info("触发检查点: stepId={}, command={}", step.getId(), r.getCommand().getType());
+                interruptHandler.suspend(
+                        xid, userId, threadId, step.getId(),
+                        plan, i, runtimeContext, r.getCommand()
+                );
+                break;  // 暂停执行，等待用户响应
+            }
+
+            if (!r.isSuccess() && step.isMandatory()) {
+                // 情况2：必选步骤失败，自动触发回滚
+                log.error("必选步骤失败，触发自动回滚: stepId={}", step.getId());
+                interruptHandler.rollback(xid);
+                break;
+            }
+
+            // 正常成功，更新运行时上下文
+            if (r.isSuccess() && r.getOutput() != null) {
+                runtimeContext.put(step.getId() + ".output", r.getOutput());
+            }
         }
         return results;
     }
@@ -172,7 +196,7 @@ public class GraphExecutor {
             case LLM_CALL -> {
                 try {
                     // 1. 构建 Prompt：使用 step 中的 task 或 input
-                    String prompt = buildLLMPrompt(step, context, memoryCtx);
+                    String prompt = promptManagerBuilder.buildGraphExecutorLLMStepPrompt(step, context, memoryCtx);
 
                     // 2. 调用模型（带弹性保护）
                     String llmOutput = resilience.executeWithFullProtection(
@@ -206,159 +230,5 @@ public class GraphExecutor {
                             .build())
                     .build();
         };
-    }
-
-    /**
-     * 根据 Step 和上下文构建 LLM 的 Prompt
-     */
-    private String buildLLMPrompt(Step step, Map<String, Object> context, MemoryContext memoryCtx) {
-        StringBuilder sb = new StringBuilder();
-
-        // ========= 1. 任务描述 =========
-        sb.append("【任务】\n");
-        sb.append(step.getTask()).append("\n\n");
-
-        // ========= 2. 输入数据（已解析占位符） =========
-        if (step.getInput() != null && !step.getInput().isEmpty()) {
-            Map<String, Object> resolvedInput = resolveInput(step.getInput(), context);
-            sb.append("【输入数据】\n");
-            // 如果包含 userQuery，单独高亮展示
-            if (resolvedInput.containsKey("userQuery")) {
-                sb.append("用户原始请求：\n").append(resolvedInput.get("userQuery")).append("\n");
-            }
-            // 其他参数格式化输出
-            resolvedInput.forEach((key, value) -> {
-                if (!"userQuery".equals(key)) {
-                    sb.append(key).append(": ").append(formatValue(value)).append("\n");
-                }
-            });
-            sb.append("\n");
-        }
-
-        // ========= 3. 对话历史（只取最近 3 条，过滤占位符） =========
-        if (memoryCtx.getRecentMessages() != null && !memoryCtx.getRecentMessages().isEmpty()) {
-            String recent = memoryCtx.getRecentMessages().stream()
-                    .filter(msg -> !"done".equals(msg.getContent()))   // 过滤无效消息
-                    .skip(Math.max(0, memoryCtx.getRecentMessages().size() - 3))
-                    .map(msg -> msg.getRole() + ": " + msg.getContent())
-                    .collect(Collectors.joining("\n"));
-            if (!recent.isEmpty()) {
-                sb.append("【对话历史】\n").append(recent).append("\n\n");
-            }
-        }
-
-        // ========= 4. 用户偏好 =========todo 先不注入这段提示词，污染大模型判断
-//        if (memoryCtx.getPreferences() != null && !memoryCtx.getPreferences().isEmpty()) {
-//            sb.append("【用户偏好】\n");
-//            memoryCtx.getPreferences().forEach((key, value) ->
-//                    sb.append("- ").append(key).append(": ").append(value).append("\n"));
-//            sb.append("\n");
-//        }
-
-        // ========= 5. 相关知识（可选） ========= todo 先不注入这段提示词，污染大模型判断
-//        if (memoryCtx.getKnowledgeChunks() != null && !memoryCtx.getKnowledgeChunks().isEmpty()) {
-//            sb.append("【相关知识】\n");
-//            memoryCtx.getKnowledgeChunks().forEach(chunk -> sb.append(chunk).append("\n"));
-//            sb.append("\n");
-//        }
-
-        return sb.toString();
-    }
-
-    // 辅助方法：格式化值，避免直接调用 toString 导致不可读
-    private String formatValue(Object value) {
-        if (value == null) return "null";
-        // 如果是简单类型或字符串，直接返回
-        if (value instanceof String || value instanceof Number || value instanceof Boolean) {
-            return value.toString();
-        }
-        // 如果是集合或 Map，序列化为 JSON 字符串（需要 ObjectMapper）
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            return value.toString();
-        }
-    }
-
-    /**
-     * 解析输入参数中的变量引用，例如 {step1.output} -> 上下文中的实际对象
-     */
-    private Map<String, Object> resolveInput(Map<String, Object> input, Map<String, Object> context) {
-        if (input == null || input.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, Object> resolved = new HashMap<>();
-        for (Map.Entry<String, Object> entry : input.entrySet()) {
-            resolved.put(entry.getKey(), resolveValue(entry.getValue(), context));
-        }
-        return resolved;
-    }
-
-    /**
-     * 递归解析单个值中的占位符
-     */
-    @SuppressWarnings("unchecked")
-    private Object resolveValue(Object value, Map<String, Object> context) {
-        if (value instanceof String str) {
-            // 完全匹配 {xxx} ：直接返回上下文中的原始对象
-            if (str.matches("\\{[^}]+\\}")) {
-                String refKey = str.substring(1, str.length() - 1);
-                Object ctxValue = context.get(refKey);
-                if (ctxValue != null) {
-                    return ctxValue;   // 保持原类型（Map、List等）
-                } else {
-                    log.warn("无法解析占位符引用: {}，上下文无此键", refKey);
-                    return str;
-                }
-            }
-            // 部分包含占位符：进行字符串替换
-            else if (str.contains("{")) {
-                return replacePlaceholders(str, context);
-            }
-            // 普通字符串
-            return str;
-
-        } else if (value instanceof Map) {
-            // 递归处理 Map 内的值
-            Map<String, Object> map = (Map<String, Object>) value;
-            Map<String, Object> resolvedMap = new HashMap<>();
-            for (Map.Entry<String, Object> e : map.entrySet()) {
-                resolvedMap.put(e.getKey(), resolveValue(e.getValue(), context));
-            }
-            return resolvedMap;
-
-        } else if (value instanceof List) {
-            // 递归处理 List 内的元素
-            List<Object> list = (List<Object>) value;
-            return list.stream()
-                    .map(item -> resolveValue(item, context))
-                    .collect(Collectors.toList());
-        }
-        // 其他类型（数字、布尔等）直接返回
-        return value;
-    }
-
-
-    /**
-     * 替换字符串中所有 {key} 占位符为上下文中的字符串值
-     */
-    private String replacePlaceholders(String template, Map<String, Object> context) {
-        Pattern pattern = Pattern.compile("\\{([^}]+)\\}");
-        Matcher matcher = pattern.matcher(template);
-        StringBuilder sb = new StringBuilder();
-        while (matcher.find()) {
-            String refKey = matcher.group(1);
-            Object ctxValue = context.get(refKey);
-            String replacement;
-            if (ctxValue != null) {
-                replacement = ctxValue.toString();   // 转为字符串嵌入
-            } else {
-                log.warn("占位符引用缺失: {}", refKey);
-                replacement = matcher.group(0);      // 保留原占位符
-            }
-            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
-        }
-        matcher.appendTail(sb);
-        return sb.toString();
     }
 }

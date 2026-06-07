@@ -3,17 +3,20 @@ package com.air.commander.interrupt;
 import com.air.commander.credential.CredentialService;
 import com.air.commander.model.ExecutionResult;
 import com.air.commander.model.InterruptContext;
+import com.air.commander.model.OrchestrationPlan;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.seata.core.exception.TransactionException;
 import io.seata.tm.api.GlobalTransaction;
 import io.seata.tm.api.GlobalTransactionContext;
 import io.seata.tm.api.transaction.SuspendedResourcesHolder;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -26,98 +29,122 @@ public class InterruptHandler {
 
     private final RedissonClient redissonClient;
     private final CredentialService credentialService;
+    private final ObjectMapper objectMapper;
 
     public InterruptHandler(CredentialService credentialService,
-                            RedissonClient redissonClient) {
+                            RedissonClient redissonClient,
+                            ObjectMapper objectMapper) {
         this.credentialService = credentialService;
         this.redissonClient = redissonClient;
+        this.objectMapper = objectMapper;
     }
 
 
     /**
-     * 挂起全局事务并保存中断上下文到 Redis
-     *
-     * @param xid     Seata 全局事务 ID
-     * @param userId  用户 ID
-     * @param stepId  中断步骤 ID
-     * @param command 中断命令（包含类型、权限范围等）
+     * 创建检查点并挂起全局事务
      */
-    public void suspend(String xid, String userId, String stepId, ExecutionResult.Command command) {
-        GlobalTransaction tx = GlobalTransactionContext.getCurrent();
-        SuspendedResourcesHolder holder = null;
+    public void suspend(String xid,
+                        String userId,
+                        String threadId,
+                        String stepId,
+                        OrchestrationPlan plan,
+                        int stepIndex,
+                        Map<String, Object> runtimeContext,
+                        ExecutionResult.Command command) {
         try {
-            // 挂起事务并获取快照
-            holder = tx.suspend();
+            // 1. 冻结分布式事务
+            GlobalTransaction tx = GlobalTransactionContext.getCurrent();
+            SuspendedResourcesHolder holder = tx.suspend();
+
+            // 2. 构建检查点上下文
+            InterruptContext ctx = InterruptContext.builder()
+                    .xid(xid)
+                    .userId(userId)
+                    .threadId(threadId)
+                    .planId(plan.getPlanId())
+                    .currentStepId(stepId)
+                    .stepIndex(stepIndex)
+                    // 保存整个计划，用于崩溃恢复
+                    .planJson(objectMapper.writeValueAsString(plan))
+                    .commandType(command.getType())
+                    .question(command.getMessage())
+                    .requiredScopes(command.getRequiredScopes())
+                    .runtimeContext(runtimeContext)
+                    .transactionHolder(holder)
+                    .createdAt(Instant.now())
+                    .timeoutAt(Instant.now().plus(Duration.ofMinutes(30)))
+                    .build();
+
+            // 3. 存入 Redis，30 分钟过期
+            RBucket<InterruptContext> bucket = redissonClient.getBucket("interrupt:" + xid);
+            bucket.set(ctx, Duration.ofMinutes(30));
+
+            log.info("检查点已创建: xid={}, stepId={}, type={}", xid, stepId, command.getType());
+
         } catch (TransactionException e) {
-            log.error("挂起全局事务失败, xid={}", xid, e);
+            log.error("挂起全局事务失败: xid={}", xid, e);
             throw new RuntimeException("事务挂起失败", e);
+        } catch (JsonProcessingException e) {
+            log.error("序列化执行计划失败", e);
+            throw new RuntimeException(e);
         }
-
-        InterruptContext ctx = InterruptContext.builder()
-                .xid(xid)
-                .userId(userId)
-                .stepId(stepId)
-                .commandType(command.getType())
-                .requiredScopes(command.getRequiredScopes())
-                .transactionHolder(holder)
-                .build();
-
-        RBucket<InterruptContext> bucket = redissonClient.getBucket("interrupt:" + xid);
-        bucket.set(ctx, Duration.ofMinutes(30));
     }
 
     /**
-     * 用户批准后恢复事务
-     *
-     * @param xid    事务 ID
-     * @param scopes 用户批准的权限范围列表
-     * @return 凭证 Token Map
-     * @throws TransactionException 事务异常
+     * 从检查点恢复事务并返回用户凭证
      */
-    public Map<String, String> resume(String xid, List<String> scopes) throws TransactionException {
+    public Map<String, String> resume(String xid, List<String> approvedScopes) {
+        // 1. 从 Redis 加载检查点
         RBucket<InterruptContext> bucket = redissonClient.getBucket("interrupt:" + xid);
         InterruptContext ctx = bucket.get();
         if (ctx == null || ctx.getTransactionHolder() == null) {
-            throw new RuntimeException("找不到事务挂起信息，xid=" + xid);
+            throw new RuntimeException("检查点不存在或已过期: " + xid);
         }
 
-        // 获取凭证
-        Map<String, String> tokens = credentialService.approve(ctx.getUserId(), scopes);
+        // 2. 获取用户授权的 Token
+        Map<String, String> tokens = credentialService.approve(ctx.getUserId(), approvedScopes);
 
-        // 恢复事务
-        GlobalTransaction tx = GlobalTransactionContext.reload(xid);
+        // 3. 恢复全局事务
         try {
+            GlobalTransaction tx = GlobalTransactionContext.reload(xid);
             tx.resume(ctx.getTransactionHolder());
         } catch (TransactionException e) {
-            log.error("恢复全局事务失败, xid={}", xid, e);
-            throw e;
+            log.error("恢复全局事务失败: xid={}", xid, e);
+            throw new RuntimeException("事务恢复失败", e);
         }
 
-        // 清理
+        // 4. 清理检查点
         bucket.delete();
+        log.info("检查点已恢复并清除: xid={}", xid);
+
         return tokens;
     }
 
     /**
-     * 用户拒绝后回滚事务
+     * 回滚全局事务并清理检查点
      */
-    public void rollback(String xid) throws TransactionException {
+    public void rollback(String xid) {
         RBucket<InterruptContext> bucket = redissonClient.getBucket("interrupt:" + xid);
         InterruptContext ctx = bucket.get();
 
-        GlobalTransaction tx = GlobalTransactionContext.reload(xid);
         try {
+            GlobalTransaction tx = GlobalTransactionContext.reload(xid);
             if (ctx != null && ctx.getTransactionHolder() != null) {
-                tx.resume(ctx.getTransactionHolder());
-            } else {
-                log.warn("未找到事务快照，尝试直接回滚, xid={}", xid);
+                tx.resume(ctx.getTransactionHolder());  // 必须先恢复才能回滚
             }
             tx.rollback();
         } catch (TransactionException e) {
-            log.error("回滚全局事务失败, xid={}", xid, e);
-            throw e;
+            log.error("回滚全局事务失败: xid={}", xid, e);
+            throw new RuntimeException("事务回滚失败", e);
         } finally {
             bucket.delete();
         }
+    }
+
+    /**
+     * 获取某个检查点状态
+     */
+    public InterruptContext getStatus(String xid) {
+        return (InterruptContext) redissonClient.getBucket("interrupt:" + xid).get();
     }
 }

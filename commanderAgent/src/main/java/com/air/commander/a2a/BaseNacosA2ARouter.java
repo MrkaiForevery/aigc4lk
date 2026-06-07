@@ -25,7 +25,11 @@ import java.util.stream.Collectors;
 
 /**
  * 基于nacos的原生A2A路由执行器实现
- * 核心:打通动态A2A路由
+ * 核心功能:
+ * 1.实时获取所有基于nacos注册的A2A的子agent的agentCard信息列表
+ * --->用于commanderAgent中使用LLM动态构建执行计划动作的动态提示词，告诉LLM我现有的子agent的能力有哪些
+ * 2.可根据输入agentName找到目标A2A-agent的endPoint
+ * --->并能够进行动态路由调用子agent提供的服务
  */
 @Slf4j
 @Component
@@ -154,6 +158,9 @@ public class BaseNacosA2ARouter {
         );
     }
 
+    /**
+     * 构建发送给远程子agent的RpcRequest
+     */
     private String buildRpcRequest(Message userMessage) throws JsonProcessingException {
         // 构建 JSON-RPC 请求
         Map<String, Object> rpcRequest = new LinkedHashMap<>();
@@ -166,6 +173,9 @@ public class BaseNacosA2ARouter {
         return requestBody;
     }
 
+    /**
+     *构建 A2A 标准消息
+     */
     private static Message buildMessage(Step step, Map<String, String> tokens, String threadId, String xid, MemoryContext memoryCtx, TextPart textPart) {
         Message userMessage = new Message.Builder()
                 .role(Message.Role.USER)
@@ -296,6 +306,9 @@ public class BaseNacosA2ARouter {
         }
     }
 
+    /**
+     *构建标准的TextParts入参
+     */
     private String buildAgentContent(Step step, Map<String, Object> context) {
         StringBuilder sb = new StringBuilder();
         sb.append("Task: ").append(step.getTask()).append("\n");
@@ -305,6 +318,9 @@ public class BaseNacosA2ARouter {
         return sb.toString();
     }
 
+    /**
+     *解析入参
+     */
     private Map<String, Object> resolveInput(Map<String, Object> input, Map<String, Object> context) {
         if (input == null) return Map.of();
         Map<String, Object> resolved = new HashMap<>();

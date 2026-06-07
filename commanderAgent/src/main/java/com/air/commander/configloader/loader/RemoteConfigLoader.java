@@ -36,7 +36,7 @@ public class RemoteConfigLoader {
     }
 
     /**
-     * 获取所有模板（键为 templateId）
+     * 获取严格场景模式下所有执行编排模板（键为 templateId）
      */
     public Map<String, OrchestrationPlan> getTemplates() {
         return graphProperties.getTemplates().stream()

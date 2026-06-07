@@ -11,11 +11,16 @@ import java.util.Map;
 @Data
 @Builder
 public class ExecutionPlan {
-    private String mode;
+    //场景模式:template/dynamic
+    private ModeType mode;
     private String planId;
     private List<ExecutionResult> results;
     private boolean interrupted;
     private String summary;
     private String xid;
     private Map<String, Object> context;
+
+    public enum ModeType {
+        TEMPLATE, DYNAMIC
+    }
 }
