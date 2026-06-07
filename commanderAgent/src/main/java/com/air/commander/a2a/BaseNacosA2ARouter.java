@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -37,12 +38,21 @@ public class BaseNacosA2ARouter {
 
     private static final String IS_RELATION_AGENT = "is_relation_agent";
     private static final String RELATION_AGENT_NAME = "relation_agent_Name";
+    private static final String A2A_CALL = "a2a-call";
+    private static final String TX_XID = "TX_XID";
+    private static final String JSON_RPC = "jsonrpc";
+    private static final String METHOD = "method";
+    private static final String PARAMS = "params";
+    private static final String ID = "id";
+
+    // 预编译正则，用于解析输入中的占位符 {stepX.output}
+    private static final Pattern OUTPUT_REF_PATTERN = Pattern.compile("\\{.*\\.output\\}");
 
     private final DiscoveryClient discoveryClient;
     private final NacosAgentCardProvider agentCardProvider;
     private final ResilienceManager resilience;
     private final ObjectMapper objectMapper;
-    private final RestClient.Builder restClientBuilder;
+    private final RestClient restClient; // 单例
 
     @Autowired
     public BaseNacosA2ARouter(DiscoveryClient discoveryClient,
@@ -55,7 +65,9 @@ public class BaseNacosA2ARouter {
         this.resilience = resilience;
         // 若Spring没有提供ObjectMapper，则使用自定义配置；否则用注入的。
         this.objectMapper = objectMapper;
-        this.restClientBuilder = restClientBuilder;   // 整个Router共用一个HTTP客户端
+        // 构建并复用RestClient实例
+        this.restClient = restClientBuilder.build();
+        ;
     }
 
     // ==================== Agent 发现 ====================
@@ -98,6 +110,13 @@ public class BaseNacosA2ARouter {
                                      String xid,
                                      MemoryContext memoryCtx) {
         String agentName = step.getAgent();
+        if (agentName == null || agentName.isBlank()) {
+            return ExecutionResult.builder()
+                    .stepId(step.getId())
+                    .success(false)
+                    .error("find A2A Agent name is empty")
+                    .build();
+        }
         TextPart textPart = new TextPart(buildAgentContent(step, context));
 
         // 构建 A2A 标准消息
@@ -113,19 +132,25 @@ public class BaseNacosA2ARouter {
                     .build();
         }
         String endpoint = agentCardWrapper.url();
+        if (endpoint == null) {
+            return ExecutionResult.builder()
+                    .stepId(step.getId())
+                    .success(false)
+                    .error("Agent not found in A2A registry: " + agentName)
+                    .build();
+        }
 
         // 带弹性保护的调用
         return resilience.executeWithFullProtection(
-                "a2a-call",
+                A2A_CALL,
                 () -> {
                     try {
                         String requestBody = buildRpcRequest(userMessage);
                         // 发送 HTTP 请求
-                        String response = restClientBuilder.build()
-                                .post()
+                        String response = restClient.post()
                                 .uri(endpoint)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .header("TX_XID", xid != null ? xid : "")
+                                .header(TX_XID, xid != null ? xid : "")
                                 .body(requestBody)
                                 .exchange((request, thatResponse) -> {
                                     StringBuilder sb = new StringBuilder();
@@ -135,13 +160,13 @@ public class BaseNacosA2ARouter {
                                         while ((line = reader.readLine()) != null) {
                                             sb.append(line).append("\n");
                                         }
+                                        return sb.toString();
                                     } catch (IOException e) {
                                         throw new RuntimeException("读取响应流失败", e);
                                     }
-                                    return sb.toString();
                                 });
-                            // 解析响应体（可能是 SSE 流或纯 JSON）
-                            return parseSseResponse(response, step.getId(), agentName);
+                        // 解析响应体（可能是 SSE 流或纯 JSON）
+                        return parseSseResponse(response, step.getId(), agentName);
                     } catch (Exception e) {
                         log.error("A2A调用失败: agent={}, endpoint={}", agentName, endpoint, e);
                         throw new RuntimeException("A2A请求失败", e);
@@ -152,7 +177,7 @@ public class BaseNacosA2ARouter {
                     return ExecutionResult.builder()
                             .stepId(step.getId())
                             .success(false)
-                            .error("Agent调用降级")
+                            .error("A2A Agent调用降级")
                             .build();
                 }
         );
@@ -164,17 +189,17 @@ public class BaseNacosA2ARouter {
     private String buildRpcRequest(Message userMessage) throws JsonProcessingException {
         // 构建 JSON-RPC 请求
         Map<String, Object> rpcRequest = new LinkedHashMap<>();
-        rpcRequest.put("jsonrpc", "2.0");
-        rpcRequest.put("method", "message/stream");
-        rpcRequest.put("params", Map.of("message", userMessage));
-        rpcRequest.put("id", UUID.randomUUID().toString());
+        rpcRequest.put(JSON_RPC, "2.0");
+        rpcRequest.put(METHOD, "message/stream");
+        rpcRequest.put(PARAMS, Map.of("message", userMessage));
+        rpcRequest.put(ID, UUID.randomUUID().toString());
 
         String requestBody = objectMapper.writeValueAsString(rpcRequest);
         return requestBody;
     }
 
     /**
-     *构建 A2A 标准消息
+     * 构建 A2A 标准消息
      */
     private static Message buildMessage(Step step, Map<String, String> tokens, String threadId, String xid, MemoryContext memoryCtx, TextPart textPart) {
         Message userMessage = new Message.Builder()
@@ -288,7 +313,7 @@ public class BaseNacosA2ARouter {
             List<Map<String, Object>> parts = (List<Map<String, Object>>) artifact.get("parts");
             String text = "";
             for (Map<String, Object> part : parts) {
-                if ("text".equals(part.get("kind"))) {
+                if ("text" .equals(part.get("kind"))) {
                     text = (String) part.get("text");
                     break;
                 }
@@ -307,7 +332,7 @@ public class BaseNacosA2ARouter {
     }
 
     /**
-     *构建标准的TextParts入参
+     * 构建标准的TextParts入参
      */
     private String buildAgentContent(Step step, Map<String, Object> context) {
         StringBuilder sb = new StringBuilder();
@@ -319,13 +344,13 @@ public class BaseNacosA2ARouter {
     }
 
     /**
-     *解析入参
+     * 解析入参
      */
     private Map<String, Object> resolveInput(Map<String, Object> input, Map<String, Object> context) {
         if (input == null) return Map.of();
         Map<String, Object> resolved = new HashMap<>();
         for (Map.Entry<String, Object> entry : input.entrySet()) {
-            if (entry.getValue() instanceof String str && str.matches("\\{.*\\.output\\}")) {
+            if (entry.getValue() instanceof String str && OUTPUT_REF_PATTERN.matcher(str).matches()) {
                 String refKey = str.replace("{", "").replace("}", "");
                 resolved.put(entry.getKey(), context.getOrDefault(refKey, str));
             } else {

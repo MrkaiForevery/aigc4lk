@@ -8,8 +8,10 @@ package com.air.commander.model;
  * @param templateId
  * @param complexity
  */
-public record IntentResult(boolean isTemplate, String scenario,
-                           String templateId, int complexity) {
+public record IntentResult(boolean isTemplate,
+                           String scenario,
+                           String templateId,
+                           int complexity) {
 
     public static IntentResult template(String scenario, String templateId, int complexity) {
         return new IntentResult(true, scenario, templateId, complexity);

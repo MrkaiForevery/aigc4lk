@@ -5,19 +5,23 @@ import com.air.commander.a2a.BaseNacosA2ARouter;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.Step;
+import com.air.commander.model.ValidationResult;
 import com.air.commander.resilience.ResilienceManager;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 动态编排器
  * 用于执行步骤计划
  */
+@Slf4j
 @Component
 public class DynamicOrchestrator {
 
@@ -41,10 +45,36 @@ public class DynamicOrchestrator {
         this.promptManagerBuilder = promptManagerBuilder;
     }
 
-
+    /**
+     * 调用复杂大模型生成任务得执行计划，且带有生成计划结果的校验逻辑，如果校验失败则需要重新生成执行计划，最多校验2次
+     */
     public OrchestrationPlan generatePlan(String userInput, MemoryContext memoryCtx) {
+        // 1. 构建完整的 Prompt
         Set<AgentCardWrapper> availableAgents = baseNacosA2ARouter.getAvailableAgents();
-        String prompt = promptManagerBuilder.buildDynamicOrchestratorGeneratePlanPrompt(userInput, memoryCtx, availableAgents);
+        String prompt = promptManagerBuilder.buildDynamicOrchestratorGeneratePlanPrompt(
+                userInput, memoryCtx, availableAgents);
+
+        // 2. 首次尝试生成计划（带保护）
+        OrchestrationPlan plan = tryBuildPlan(prompt);
+
+        // 3. 校验并重试
+        ValidationResult vr = planValidator.validateOrchestrationPlan(plan);
+        for (int retry = 0; retry < 2 && !vr.isValid(); retry++) {
+            String errors = String.join("; ", vr.getErrors());
+            String retryPrompt = prompt + "\n\n上次计划有误：" + errors + "\n请修正后重新生成。";
+            plan = tryBuildPlan(retryPrompt);  // 再次尝试
+            vr = planValidator.validateOrchestrationPlan(plan);
+        }
+
+        // 4. 强制注入 userQuery（无论来源，确保每个步骤都有）
+        injectUserQuery(plan, userInput);
+        return plan;
+    }
+
+    /**
+     * 调用 LLM 生成计划并解析，失败时返回降级计划
+     */
+    private OrchestrationPlan tryBuildPlan(String prompt) {
         String llmOutput = resilienceManager.executeWithFullProtection(
                 "llm-reasoning-model",
                 () -> chatClient.prompt(prompt).call().content(),
@@ -53,49 +83,99 @@ public class DynamicOrchestrator {
         try {
             Map<String, Object> planMap = objectMapper.readValue(llmOutput, Map.class);
             List<Step> steps = parseSteps(planMap);
-            OrchestrationPlan plan = OrchestrationPlan.builder()
+            return OrchestrationPlan.builder()
                     .planId(UUID.randomUUID().toString())
                     .executionMode(detectMode(planMap))
                     .steps(steps)
                     .build();
-            if (!planValidator.validate(plan).isValid()) {
-                // 重试一次
-                llmOutput = chatClient.prompt(prompt + "\n请修正错误").call().content();
-                planMap = objectMapper.readValue(llmOutput, Map.class);
-                steps = parseSteps(planMap);
-                plan.setSteps(steps);
-            }
-
-            // 注意:强制将 userInput 注入到每个步骤的 input 中
-            for (Step step : plan.getSteps()) {
-                if (step.getInput() == null) {
-                    step.setInput(new HashMap<>());
-                }
-                step.getInput().put("userQuery", userInput);
-            }
-
-            return plan;
         } catch (Exception e) {
-            throw new RuntimeException("Plan generation failed", e);
+            log.error("解析 LLM 生成的计划失败，返回降级计划", e);
+            return buildFallbackPlan();
         }
     }
 
+    /**
+     * 注入 userQuery 到每个步骤的 input 中
+     */
+    private void injectUserQuery(OrchestrationPlan plan, String userInput) {
+        for (Step step : plan.getSteps()) {
+            if (step.getInput() == null) {
+                step.setInput(new HashMap<>());
+            }
+            step.getInput().put("userQuery", userInput);
+        }
+    }
+
+    /**
+     * 降级计划：单步 LLM_CALL
+     */
+    private OrchestrationPlan buildFallbackPlan() {
+        Step fallbackStep = Step.builder()
+                .id("step1")
+                .type(Step.StepType.LLM_CALL)
+                .task("直接回答用户问题")
+                .build();
+        return OrchestrationPlan.builder()
+                .planId(UUID.randomUUID().toString())
+                .executionMode(OrchestrationPlan.ExecutionMode.SEQUENTIAL)
+                .steps(List.of(fallbackStep))
+                .build();
+    }
+
+
+    /**
+     * 解析 LLM 返回的步骤列表
+     */
     private List<Step> parseSteps(Map<String, Object> planMap) {
-        List<Map<String, Object>> stepList = (List<Map<String, Object>>) planMap.get("steps");
-        List<Step> steps = new ArrayList<>();
-        for (Map<String, Object> s : stepList) {
-            steps.add(Step.builder()
-                    .id((String) s.get("id"))
-                    .type(Step.StepType.valueOf((String) s.get("type")))
-                    .agent((String) s.get("agent"))
-                    .task((String) s.get("task"))
-                    .input((Map<String, Object>) s.get("input"))
-                    .dependsOn((List<String>) s.get("dependsOn"))
-                    .build());
+        List<Map<String, Object>> stepList = getList(planMap, "steps");
+        if (stepList == null || stepList.isEmpty()) {
+            return List.of();
         }
-        return steps;
+        return stepList.stream()
+                .map(this::parseStep)
+                .collect(Collectors.toList());
     }
 
+    /**
+     * 解析单个步骤
+     */
+    private Step parseStep(Map<String, Object> stepMap) {
+        Step.StepBuilder builder = Step.builder()
+                .id(getString(stepMap, "id"))
+                .type(Step.StepType.valueOf(getString(stepMap, "type")))
+                .agent(getString(stepMap, "agent"))
+                .task(getString(stepMap, "task"))
+                .input(getMap(stepMap, "input"))
+                .dependsOn(getStringList(stepMap, "dependsOn"));
+
+        // 可选：解析检查点配置
+        parseCheckpoint(stepMap).ifPresent(builder::checkpoint);
+
+        return builder.build();
+    }
+
+    /**
+     * 解析检查点配置（如果存在）
+     */
+    private Optional<Step.CheckpointConfig> parseCheckpoint(Map<String, Object> stepMap) {
+        Map<String, Object> cp = getMap(stepMap, "checkpoint");
+        if (cp == null || cp.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(Step.CheckpointConfig.builder()
+                .type(Step.CheckpointConfig.CheckpointType.valueOf(getString(cp, "type")))
+                .question(getString(cp, "question"))
+                .requiredScopes(getStringList(cp, "requiredScopes"))
+                .timeoutMinutes(getInt(cp, "timeoutMinutes", 30))
+                .onAgree(getString(cp, "onAgree"))
+                .onReject(getString(cp, "onReject"))
+                .build());
+    }
+
+    /**
+     * 提供默认兜底得执行模式
+     */
     private OrchestrationPlan.ExecutionMode detectMode(Map<String, Object> planMap) {
         try {
             return OrchestrationPlan.ExecutionMode.valueOf(
@@ -104,4 +184,41 @@ public class DynamicOrchestrator {
             return OrchestrationPlan.ExecutionMode.SEQUENTIAL;
         }
     }
+
+    // ========== 安全的 Map 取值工具方法 ==========
+
+    @SuppressWarnings("unchecked")
+    private String getString(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private int getInt(Map<String, Object> map, String key, int defaultValue) {
+        Object value = map.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        return defaultValue;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getMap(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value instanceof Map ? (Map<String, Object>) value : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getList(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value instanceof List ? (List<Map<String, Object>>) value : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> getStringList(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value instanceof List ? (List<String>) value : List.of();
+    }
+
+
 }

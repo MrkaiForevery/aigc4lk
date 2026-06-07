@@ -31,7 +31,6 @@ public class GraphExecutor {
     private final GraphBuilder graphBuilder;
     private final ResilienceManager resilience;
 
-    private final ObjectMapper objectMapper;
     private final PromptManagerBuilder promptManagerBuilder;
 
     // 固定线程池，替代虚拟线程
@@ -50,7 +49,6 @@ public class GraphExecutor {
         this.interruptHandler = interruptHandler;
         this.graphBuilder = graphBuilder;
         this.resilience = resilience;
-        this.objectMapper = objectMapper;
         this.promptManagerBuilder = promptManagerBuilder;
         this.parallelExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }

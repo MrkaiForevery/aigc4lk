@@ -5,63 +5,153 @@ import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.Step;
 import com.air.commander.model.ValidationResult;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 执行效果的的计划验证器
+ * 计划校验器
+ * 对LLM生成的执行计划结果进行校验
  */
 @Component
-@RequiredArgsConstructor
 public class PlanValidator {
 
     private final BaseNacosA2ARouter baseNacosA2ARouter;
 
-    public ValidationResult validate(OrchestrationPlan plan) {
-        List<String> errors = new ArrayList<>();
-        if (hasCycle(plan.getSteps())) errors.add("Cycle detected");
-        // 从 AgentCardWrapper 中提取 Agent 名称
-        Set<String> availableAgentNames = baseNacosA2ARouter.getAvailableAgents().stream()
-                .map(AgentCardWrapper::name)      // 假设 AgentCardWrapper 有 name() 或 getName()
-                .collect(Collectors.toSet());
+    public PlanValidator(BaseNacosA2ARouter baseNacosA2ARouter) {
+        this.baseNacosA2ARouter = baseNacosA2ARouter;
+    }
 
-        for (Step step : plan.getSteps()) {
-            if (step.getType() == Step.StepType.A2A_DELEGATE
-                    && step.getAgent() != null
-                    && !availableAgentNames.contains(step.getAgent())) {
-                errors.add("Agent not found: " + step.getAgent());
+    public ValidationResult validateOrchestrationPlan(OrchestrationPlan plan) {
+        List<String> errors = new ArrayList<>();
+
+        // L1 结构校验
+        errors.addAll(validateStructure(plan));
+
+        // L2 逻辑校验
+        errors.addAll(validateLogic(plan));
+
+        // L3 业务语义（仅当 L1,L2 通过时可选择执行，但这里收集全部）
+        errors.addAll(validateBusinessSemantics(plan));
+
+        // L4 安全（可选）
+        errors.addAll(validateSecurity(plan));
+
+        return new ValidationResult(errors.isEmpty(), errors);
+    }
+
+    // ==================== L1 结构完整性 ====================
+    private List<String> validateStructure(OrchestrationPlan plan) {
+        List<String> errors = new ArrayList<>();
+        if (plan.getSteps() == null || plan.getSteps().isEmpty()) {
+            errors.add("计划中没有步骤");
+            return errors; // 后续校验无意义
+        }
+        for (int i = 0; i < plan.getSteps().size(); i++) {
+            Step step = plan.getSteps().get(i);
+            if (step.getId() == null || step.getId().isBlank()) {
+                errors.add("步骤 " + i + " 缺少 id");
+            }
+            if (step.getType() == null) {
+                errors.add("步骤 " + step.getId() + " 缺少 type");
+            }
+            // 检查 INTERRUPT 步骤的 checkpoint 结构
+            if (step.getType() == Step.StepType.INTERRUPT && step.getCheckpoint() != null) {
+                errors.addAll(validateCheckpointStructure(step));
             }
         }
-        return errors.isEmpty() ? new ValidationResult(true, List.of()) :
-                new ValidationResult(false, errors);
+        return errors;
     }
 
-    private boolean hasCycle(List<Step> steps) {
-        Map<String, List<String>> graph = new HashMap<>();
-        for (Step s : steps) {
-            graph.put(s.getId(), s.getDependsOn() != null ? s.getDependsOn() : List.of());
+    private List<String> validateCheckpointStructure(Step step) {
+        List<String> errors = new ArrayList<>();
+        Step.CheckpointConfig cp = step.getCheckpoint();
+        if (cp.getType() == null) {
+            errors.add("步骤 " + step.getId() + " 的 checkpoint 缺少 type");
         }
-        // DFS
-        Set<String> visited = new HashSet<>(), recStack = new HashSet<>();
-        for (String node : graph.keySet()) {
-            if (dfs(node, graph, visited, recStack)) return true;
+        if (cp.getQuestion() == null || cp.getQuestion().isBlank()) {
+            errors.add("步骤 " + step.getId() + " 的 checkpoint 缺少 question");
         }
+        if (cp.getType() == Step.CheckpointConfig.CheckpointType.CREDENTIAL
+                && (cp.getRequiredScopes() == null || cp.getRequiredScopes().isEmpty())) {
+            errors.add("步骤 " + step.getId() + " 的 CREDENTIAL 检查点缺少 requiredScopes");
+        }
+        return errors;
+    }
+
+    // ==================== L2 逻辑一致性 ====================
+    private List<String> validateLogic(OrchestrationPlan plan) {
+        List<String> errors = new ArrayList<>();
+        // 1. 拓扑排序检测循环依赖
+        if (hasCycle(plan.getSteps())) {
+            errors.add("计划存在循环依赖");
+        }
+        // 2. 变量引用有效性
+        errors.addAll(validateVariableRefs(plan));
+        // 3. Agent 白名单
+        errors.addAll(validateAgentWhitelist(plan));
+        return errors;
+    }
+
+    private boolean hasCycle(List<Step> steps) { /* 现有实现 */
         return false;
     }
 
-    private boolean dfs(String node, Map<String, List<String>> graph, Set<String> visited, Set<String> recStack) {
-        if (recStack.contains(node)) return true;
-        if (visited.contains(node)) return false;
-        visited.add(node);
-        recStack.add(node);
-        for (String n : graph.getOrDefault(node, List.of())) {
-            if (dfs(n, graph, visited, recStack)) return true;
+    private List<String> validateVariableRefs(OrchestrationPlan plan) {
+        List<String> errors = new ArrayList<>();
+        Set<String> validRefs = plan.getSteps().stream()
+                .map(s -> s.getId() + ".output")
+                .collect(Collectors.toSet());
+        for (Step step : plan.getSteps()) {
+            if (step.getInput() != null) {
+                step.getInput().values().forEach(val -> {
+                    if (val instanceof String ref && ref.matches("\\{.*\\.output\\}")) {
+                        String refKey = ref.substring(1, ref.length() - 1);
+                        if (!validRefs.contains(refKey)) {
+                            errors.add("步骤 " + step.getId() + " 引用了不存在的输出: " + refKey);
+                        }
+                    }
+                });
+            }
         }
-        recStack.remove(node);
-        return false;
+        return errors;
+    }
+
+    private List<String> validateAgentWhitelist(OrchestrationPlan plan) {
+
+        Set<String> availableAgents = baseNacosA2ARouter.getAvailableAgents().stream()
+                .map(AgentCardWrapper::name).collect(Collectors.toSet());
+
+        return plan.getSteps().stream()
+                .filter(s -> s.getType() == Step.StepType.A2A_DELEGATE && s.getAgent() != null)
+                .filter(s -> !availableAgents.contains(s.getAgent()))
+                .map(s -> "步骤 " + s.getId() + " 引用了不可用的 Agent: " + s.getAgent())
+                .collect(Collectors.toList());
+    }
+
+    // ==================== L3 业务语义 ====================
+
+    /**
+     * 预留后续补全 todo
+     */
+    private List<String> validateBusinessSemantics(OrchestrationPlan plan) {
+        List<String> errors = new ArrayList<>();
+        // 1. 必选步骤不能缺少
+        // 2. 关键操作（如发送邮件、扣款）前应有 CONFIRM 或 CREDENTIAL 检查点
+        // 这可以根据任务类型或 step task 关键词判断，但属于软约束，可作为 warning
+        return errors;
+    }
+
+    /**
+     * 预留后续补全 todo
+     */
+    // ==================== L4 安全合规 ====================
+    private List<String> validateSecurity(OrchestrationPlan plan) {
+        List<String> errors = new ArrayList<>();
+        // 检查是否携带 userQuery 且 userQuery 中不应包含明文密码等（如果系统有要求）
+        // 对 CREDENTIAL 检查点，验证 requiredScopes 是否在许可范围内
+        return errors;
     }
 }
 

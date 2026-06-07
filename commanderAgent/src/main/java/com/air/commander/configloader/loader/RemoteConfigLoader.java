@@ -35,6 +35,11 @@ public class RemoteConfigLoader {
         return this.chromaDbClientProperties;
     }
 
+
+    public List<GraphTemplatesProperties.TemplateItem> getGraphTemplates() {
+        return graphProperties.getTemplates();
+    }
+
     /**
      * 获取严格场景模式下所有执行编排模板（键为 templateId）
      */

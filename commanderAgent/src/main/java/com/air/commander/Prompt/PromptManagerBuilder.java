@@ -242,7 +242,8 @@ public class PromptManagerBuilder {
         sb.append("2. 要实现这个需求，需要哪些子任务？\n");
         sb.append("3. 每个子任务能否由某个可用的 Agent 完成？如果没有合适的 Agent，则使用 LLM_CALL。\n");
         sb.append("4. 这些子任务之间有什么依赖关系？可以并行吗？需要条件分支吗？需要反复修正吗？\n");
-        sb.append("5. 根据任务结构，选择最合适的全局执行模式（见下方定义）。\n\n");
+        sb.append("5. 分析每个子任务的风险等级，判断是否需要人工干预（见下方检查点规则）。\n");
+        sb.append("6. 根据任务结构，选择最合适的全局执行模式（见下方定义）。\n\n");
 
         // ========= 执行模式详细定义 =========
         sb.append("【执行模式定义】\n");
@@ -262,6 +263,29 @@ public class PromptManagerBuilder {
         sb.append("3. 如果某个步骤需要了解用户的原始意图，你必须将其完整放入 input.userQuery 字段。\n");
         sb.append("4. A2A_DELEGATE 步骤的 agent 字段必须是可用 Agent 列表中的名称，不能虚构。\n");
         sb.append("5. 尽量将步骤数量控制在 3 个以内，除非任务确实很复杂。\n\n");
+
+
+        // ========= 检查点规则（新增，融合到原有逻辑中） =========
+        sb.append("【检查点（人工干预）规则】\n");
+        sb.append("你必须分析每个子任务的风险等级，判断是否需要插入 type=INTERRUPT 的步骤作为检查点，在关键操作前让用户确认或授权。\n\n");
+
+        sb.append("以下情况必须插入 CREDENTIAL 类型检查点（需要用户授权权限）：\n");
+        sb.append("  - 访问敏感数据或受保护资源（如财务数据、医疗记录、用户隐私信息）\n");
+        sb.append("  - 调用需要特殊权限的 API 或系统（如财务系统、CRM系统）\n");
+        sb.append("  - 示例：用户要求\"分析财务数据\"，在调用财务系统前插入授权检查点\n\n");
+
+        sb.append("以下情况必须插入 CONFIRM 类型检查点（需要用户确认操作）：\n");
+        sb.append("  - 执行不可逆操作（如发送邮件、扣款、发布内容、删除数据）\n");
+        sb.append("  - 关键决策点，需要用户确认中间结果（如生成正式报告、执行重要分析）\n");
+        sb.append("  - 输出结果可能产生重大影响（如发送给老板的报告、对外发布的内容）\n");
+        sb.append("  - 示例：数据分析完成后，插入确认点让用户验证数据后再生成报告\n\n");
+
+        sb.append("以下情况不需要检查点：\n");
+        sb.append("  - 纯信息查询（如\"介绍一下最新的AI技术\"）\n");
+        sb.append("  - 简单的文本生成或格式转换\n");
+        sb.append("  - 用户明确表示\"直接执行\"或\"不需要确认\"\n\n");
+
+        sb.append("如果不需要人工干预，则不要插入 INTERRUPT 步骤。\n\n");
 
         // 1. 可用 Agent 列表（包含能力描述）
         sb.append("=== 可用Agent ===\n");
@@ -316,6 +340,7 @@ public class PromptManagerBuilder {
 //        }
 
         // ========= 输出格式要求（强制 JSON） =========
+        // ========= 输出格式要求（增强版，包含检查点字段） =========
         sb.append("你必须输出一个完整的 JSON 对象，包含以下字段：\n");
         sb.append("- executionMode: 字符串，取值必须是 SEQUENTIAL/PARALLEL/CONDITIONAL/ITERATIVE_CORRECTION/COMPETITIVE/PIPELINE 之一。\n");
         sb.append("- steps: 数组，每个元素是一个对象，包含：\n");
@@ -324,29 +349,76 @@ public class PromptManagerBuilder {
         sb.append("    - agent: 当 type 为 A2A_DELEGATE 时必须，取值为可用 Agent 名称。\n");
         sb.append("    - task: 具体任务描述，必须是一个完整自然语言句子。\n");
         sb.append("    - input: 对象，必须包含 'userQuery'（值为当前用户请求全文），以及步骤所需的其它参数。\n");
-        sb.append("    - dependsOn: 字符串数组，列出本步骤依赖的前置步骤 id，无依赖则为空数组。\n\n");
+        sb.append("    - dependsOn: 字符串数组，列出本步骤依赖的前置步骤 id，无依赖则为空数组。\n");
+        sb.append("    - checkpoint: 当 type 为 INTERRUPT 时可选，包含以下子字段：\n");
+        sb.append("        - type: \"CREDENTIAL\" 或 \"CONFIRM\"\n");
+        sb.append("        - question: 向用户展示的问题\n");
+        sb.append("        - requiredScopes: 字符串数组（CREDENTIAL 类型必填）\n");
+        sb.append("        - timeoutMinutes: 超时分钟数，默认 30\n\n");
 
-        // ========= 正确示例 =========
-        sb.append("【正确示例】\n");
-        sb.append("用户请求：\"帮我分析最近的销售数据并生成报告\"\n");
+        // ========= 正确示例（增强版，包含检查点） =========
+        sb.append("【正确示例1：无检查点的简单任务】\n");
+        sb.append("用户请求：\"介绍一下最新的AI技术\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
         sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
         sb.append("  \"steps\": [\n");
         sb.append("    {\n");
         sb.append("      \"id\": \"step1\",\n");
-        sb.append("      \"type\": \"A2A_DELEGATE\",\n");
-        sb.append("      \"agent\": \"data-analysis-agent\",\n");
-        sb.append("      \"task\": \"提取并分析最近一个季度的销售数据，输出趋势图和关键指标\",\n");
-        sb.append("      \"input\": {\"userQuery\": \"帮我分析最近的销售数据并生成报告\", \"dataRange\": \"last_quarter\"},\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"检索并介绍当前最新的AI技术趋势\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"介绍一下最新的AI技术\"},\n");
+        sb.append("      \"dependsOn\": []\n");
+        sb.append("    }\n");
+        sb.append("  ]\n");
+        sb.append("}\n\n");
+
+        sb.append("【正确示例2：包含检查点的敏感任务】\n");
+        sb.append("用户请求：\"帮我分析财务数据并发送报告给老板\"\n");
+        sb.append("输出 JSON：\n");
+        sb.append("{\n");
+        sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
+        sb.append("  \"steps\": [\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step1\",\n");
+        sb.append("      \"type\": \"INTERRUPT\",\n");
+        sb.append("      \"task\": \"请求用户授权访问财务数据\",\n");
+        sb.append("      \"checkpoint\": {\n");
+        sb.append("        \"type\": \"CREDENTIAL\",\n");
+        sb.append("        \"question\": \"即将访问财务敏感数据，需要您的授权\",\n");
+        sb.append("        \"requiredScopes\": [\"financial_read\"],\n");
+        sb.append("        \"timeoutMinutes\": 30\n");
+        sb.append("      },\n");
+        sb.append("      \"input\": {\"userQuery\": \"帮我分析财务数据并发送报告给老板\"},\n");
         sb.append("      \"dependsOn\": []\n");
         sb.append("    },\n");
         sb.append("    {\n");
         sb.append("      \"id\": \"step2\",\n");
-        sb.append("      \"type\": \"LLM_CALL\",\n");
-        sb.append("      \"task\": \"根据分析结果撰写一份专业的销售报告，包含摘要、图表描述和趋势预测\",\n");
-        sb.append("      \"input\": {\"userQuery\": \"帮我分析最近的销售数据并生成报告\", \"analysisResult\": \"{step1.output}\"},\n");
+        sb.append("      \"type\": \"A2A_DELEGATE\",\n");
+        sb.append("      \"agent\": \"data-analysis-agent\",\n");
+        sb.append("      \"task\": \"提取并分析最近一个季度的财务数据，输出趋势图和关键指标\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"帮我分析财务数据并发送报告给老板\", \"dataRange\": \"last_quarter\"},\n");
         sb.append("      \"dependsOn\": [\"step1\"]\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step3\",\n");
+        sb.append("      \"type\": \"INTERRUPT\",\n");
+        sb.append("      \"task\": \"确认分析结果后是否发送报告\",\n");
+        sb.append("      \"checkpoint\": {\n");
+        sb.append("        \"type\": \"CONFIRM\",\n");
+        sb.append("        \"question\": \"财务分析已完成，请确认是否发送报告给老板？\",\n");
+        sb.append("        \"timeoutMinutes\": 30\n");
+        sb.append("      },\n");
+        sb.append("      \"input\": {\"userQuery\": \"帮我分析财务数据并发送报告给老板\", \"analysisResult\": \"{step2.output}\"},\n");
+        sb.append("      \"dependsOn\": [\"step2\"]\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step4\",\n");
+        sb.append("      \"type\": \"A2A_DELEGATE\",\n");
+        sb.append("      \"agent\": \"email-agent\",\n");
+        sb.append("      \"task\": \"将财务分析报告发送给老板\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"帮我分析财务数据并发送报告给老板\", \"report\": \"{step2.output}\", \"recipient\": \"boss@company.com\"},\n");
+        sb.append("      \"dependsOn\": [\"step3\"]\n");
         sb.append("    }\n");
         sb.append("  ]\n");
         sb.append("}\n\n");

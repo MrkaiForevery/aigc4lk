@@ -6,35 +6,57 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 执行每一步的载体实体
+ * 核心承载实体类
+ * 可执行计划的每一步骤的载体实体
  */
 @Data
 @Builder
 public class Step {
+
     private String id;
+
+    /**步骤的执行类型**/
     private StepType type;
+
+    /**当type = A2A_DELEGATE 时，指定要调用的远程 Agent 名称**/
     private String agent;
+
+    /**任务的自然语言描述，告诉执行者“具体做什么**/
     private String task;
+
+    /**指定要使用的模型名称（如 "fast-model"、"reasoning-model"）**/
     private String model;
+
+    /**步骤执行时的输入参数。可以包含具体的值，也可以包含占位符 {stepX.output} 来引用前序步骤的输出**/
     private Map<String, Object> input;
+
+    /**定义步骤的前置依赖，列表中的值必须是其他步骤的 id**/
     private List<String> dependsOn;
+
+    /**定该步骤是否为强制步骤。如果必选步骤执行失败（且未触发检查点），GraphExecutor 会停止后续步骤并触发回滚（如果启用了回滚配置）**/
     private boolean mandatory;
+
+    /**步骤的最大执行时间（毫秒）**/
     private long timeoutMs;
-    private int retry;
+
+    /**步骤失败时的重试次数**/
+    private int retry; //
 
     // ========== INTERRUPT 专用字段 ==========
-    private String question;                    // 向用户展示的问题
-    private List<String> options;               // 可选项（如 ["同意", "拒绝"]）
+    /**向用户展示的问题**/
+    private String question;
+
+    /**可选项（如 ["同意", "拒绝"]）**/
+    private List<String> options;
 
     // ========== Checkpoint 配置（新增） ==========
-    private CheckpointConfig checkpoint;        // 检查点配置，非 null 时表示这是一个检查点
+    /** 检查点配置，非 null 时表示这是一个检查点**/
+    private CheckpointConfig checkpoint;
 
     // ========== 回滚相关（新增） ==========
-    private String rollbackSavepoint;           // 回滚保存点标识（用于模板中指定回滚起始位置）
+     /**回滚保存点标识（用于模板中指定回滚起始位置）**/
+    private String rollbackSavepoint;
 
-    /**
-     * 检查点配置
-     */
     @Data
     @Builder
     public static class CheckpointConfig {

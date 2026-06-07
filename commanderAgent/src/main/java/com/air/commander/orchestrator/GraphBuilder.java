@@ -17,6 +17,13 @@ public class GraphBuilder {
         return topologicalSort(plan.getSteps());
     }
 
+    /**
+     * 将步骤进行拓扑排序
+     * why:
+     * 步骤顺序不可信：LLM 可能把有依赖关系的步骤随意排列（例如把 step2 放在 step1 前面，但 step2 依赖 step1 的输出）。
+     * 依赖关系存在于字段中：dependsOn 字段才是真正的执行顺序约束，而不是数组索引。
+     * 支持并行识别：拓扑排序后，可以识别出哪些步骤没有依赖关系，从而支持并行执行。
+     */
     private List<Step> topologicalSort(List<Step> steps) {
         Map<String, Step> stepMap = new LinkedHashMap<>();
         steps.forEach(s -> stepMap.put(s.getId(), s));
