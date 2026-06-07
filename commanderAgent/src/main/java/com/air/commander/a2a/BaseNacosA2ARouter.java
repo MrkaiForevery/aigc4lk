@@ -104,7 +104,7 @@ public class BaseNacosA2ARouter {
      * 调用指定的 Agent
      */
     public ExecutionResult callAgent(Step step,
-                                     Map<String, Object> context,
+                                     Map<String, Object> runtimeContext,
                                      Map<String, String> tokens,
                                      String threadId,
                                      String xid,
@@ -114,10 +114,10 @@ public class BaseNacosA2ARouter {
             return ExecutionResult.builder()
                     .stepId(step.getId())
                     .success(false)
-                    .error("find A2A Agent name is empty")
+                    .error("[BaseNacosA2ARouter.callAgent]A2A Agent name is empty")
                     .build();
         }
-        TextPart textPart = new TextPart(buildAgentContent(step, context));
+        TextPart textPart = new TextPart(buildAgentContent(step, runtimeContext));
 
         // 构建 A2A 标准消息
         Message userMessage = buildMessage(step, tokens, threadId, xid, memoryCtx, textPart);
@@ -336,27 +336,85 @@ public class BaseNacosA2ARouter {
      */
     private String buildAgentContent(Step step, Map<String, Object> context) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Task: ").append(step.getTask()).append("\n");
+        sb.append("【任务】\n");
+        sb.append(step.getTask()).append("\n\n");
+
         if (step.getInput() != null && !step.getInput().isEmpty()) {
-            sb.append("Input: ").append(resolveInput(step.getInput(), context));
+            sb.append("【输入数据】\n");
+            Map<String, Object> resolvedInput = resolveInput(step.getInput(), context);
+            for (Map.Entry<String, Object> entry : resolvedInput.entrySet()) {
+                String key = entry.getKey();
+                Object rawValue = entry.getValue();
+                String formattedValue = formatValue(rawValue);
+
+                // 每个字段单独一个区块，方便子Agent解析
+                sb.append("--- ").append(key).append(" ---\n");
+                sb.append(formattedValue).append("\n\n");
+            }
         }
         return sb.toString();
     }
 
     /**
-     * 解析入参
+     * 将任意值格式化为字符串，并进行最终长度控制
+     */
+    private String formatValue(Object value) {
+        if (value == null) return "（无数据）";
+        String str;
+        if (value instanceof String s) {
+            str = s;
+        } else if (value instanceof Map || value instanceof List) {
+            // 复杂对象序列化为 JSON（可引入 objectMapper）
+            try {
+                str = objectMapper.writeValueAsString(value);
+            } catch (JsonProcessingException e) {
+                str = value.toString();
+            }
+        } else {
+            str = value.toString();
+        }
+
+        // 最终上限 5000 字符，防止整个区块过大
+        if (str.length() > 5000) {
+            str = str.substring(0, 5000) + "\n...(内容过长已截断)";
+        }
+        return str;
+    }
+
+    /**
+     * 解析输入中的占位符引用（{stepX.output}），并对长文本进行截断
      */
     private Map<String, Object> resolveInput(Map<String, Object> input, Map<String, Object> context) {
         if (input == null) return Map.of();
         Map<String, Object> resolved = new HashMap<>();
         for (Map.Entry<String, Object> entry : input.entrySet()) {
-            if (entry.getValue() instanceof String str && OUTPUT_REF_PATTERN.matcher(str).matches()) {
-                String refKey = str.replace("{", "").replace("}", "");
-                resolved.put(entry.getKey(), context.getOrDefault(refKey, str));
+            Object value = entry.getValue();
+            if (value instanceof String str && str.matches("\\{.*\\.output\\}")) {
+                String refKey = str.substring(1, str.length() - 1);
+                Object ctxValue = context.get(refKey);
+                // 递归展开（如果 ctxValue 本身也是 Map 且包含占位符，但通常不需要）
+                resolved.put(entry.getKey(), truncateIfNeeded(ctxValue));
             } else {
-                resolved.put(entry.getKey(), entry.getValue());
+                resolved.put(entry.getKey(), value);
             }
         }
         return resolved;
+    }
+
+    /**
+     * 对字符串值进行长度截断，防止请求体过大
+     */
+    private Object truncateIfNeeded(Object value) {
+        if (value instanceof String str) {
+            if (str.length() > 3000) {
+                return str.substring(0, 3000) + "\n...(内容过长已截断)";
+            }
+        } else if (value instanceof Map map) {
+            // 对Map递归截断（可选）
+            Map<String, Object> truncated = new HashMap<>();
+            map.forEach((k, v) -> truncated.put(k.toString(), truncateIfNeeded(v)));
+            return truncated;
+        }
+        return value;
     }
 }

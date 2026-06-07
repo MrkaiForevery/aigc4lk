@@ -4,6 +4,7 @@ import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.Step;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.a2a.spec.AgentSkill;
 import lombok.RequiredArgsConstructor;
@@ -76,7 +77,7 @@ public class PromptManagerBuilder {
     /**
      * GraphExecutor执行图流程时，当step步骤是LLM类型时需要的Prompt提示词
      */
-    public String buildGraphExecutorLLMStepPrompt(Step step, Map<String, Object> context, MemoryContext memoryCtx) {
+    public String buildGraphExecutorLLMStepPrompt(Step step, Map<String, Object> context, MemoryContext memoryCtx) throws JsonProcessingException {
         StringBuilder sb = new StringBuilder();
         // ========= 1. 任务描述 =========
         sb.append("【任务】\n");
@@ -132,7 +133,7 @@ public class PromptManagerBuilder {
     /**
      * 解析输入参数中的变量引用，例如 {step1.output} -> 上下文中的实际对象
      */
-    private Map<String, Object> resolveInput(Map<String, Object> input, Map<String, Object> context) {
+    private Map<String, Object> resolveInput(Map<String, Object> input, Map<String, Object> context) throws JsonProcessingException {
         if (input == null || input.isEmpty()) {
             return Map.of();
         }
@@ -147,14 +148,14 @@ public class PromptManagerBuilder {
      * 递归解析单个值中的占位符
      */
     @SuppressWarnings("unchecked")
-    private Object resolveValue(Object value, Map<String, Object> context) {
+    private Object resolveValue(Object value, Map<String, Object> context) throws JsonProcessingException {
         if (value instanceof String str) {
             // 完全匹配 {xxx} ：直接返回上下文中的原始对象
             if (str.matches("\\{[^}]+\\}")) {
                 String refKey = str.substring(1, str.length() - 1);
                 Object ctxValue = context.get(refKey);
                 if (ctxValue != null) {
-                    return ctxValue;   // 保持原类型（Map、List等）
+                    return truncateContextValue(ctxValue);  // ← 截断
                 } else {
                     log.warn("无法解析占位符引用: {}，上下文无此键", refKey);
                     return str;
@@ -180,7 +181,14 @@ public class PromptManagerBuilder {
             // 递归处理 List 内的元素
             List<Object> list = (List<Object>) value;
             return list.stream()
-                    .map(item -> resolveValue(item, context))
+                    .map(item -> {
+                        try {
+                            return resolveValue(item, context);
+                        } catch (JsonProcessingException e) {
+                            log.error("解析失败");
+                            throw new RuntimeException(e);
+                        }
+                    })
                     .collect(Collectors.toList());
         }
         // 其他类型（数字、布尔等）直接返回
@@ -225,6 +233,27 @@ public class PromptManagerBuilder {
         }
     }
 
+    /**
+     * 对从 context 中取出的值进行长度控制
+     */
+    private Object truncateContextValue(Object value) throws JsonProcessingException {
+        if (value instanceof String str) {
+            if (str.length() > 4000) {
+                return str.substring(0, 4000) + "\n...(内容过长，已截断，完整数据可引用占位符获取)";
+            }
+            return str;
+        }
+        if (value instanceof Map map) {
+            String json = objectMapper.writeValueAsString(map);
+            if (json.length() > 4000) {
+                // 保留 map 中第一个 key 的完整内容，其余截断
+                // 或者转为摘要字符串
+                return json.substring(0, 4000) + "...(已截断)";
+            }
+            return value; // 如果 Map 不大，保持原样
+        }
+        return value;
+    }
 
     /**
      * 在DynamicOrchestrator中LLM执行GeneratePlan时所需要的提示词
@@ -262,7 +291,9 @@ public class PromptManagerBuilder {
         sb.append("   - 正确: \"对用户的销售数据进行多维分析，输出趋势图和关键指标\"\n");
         sb.append("3. 如果某个步骤需要了解用户的原始意图，你必须将其完整放入 input.userQuery 字段。\n");
         sb.append("4. A2A_DELEGATE 步骤的 agent 字段必须是可用 Agent 列表中的名称，不能虚构。\n");
-        sb.append("5. 尽量将步骤数量控制在 3 个以内，除非任务确实很复杂。\n\n");
+        sb.append("5. 尽量将步骤数量控制少于或等于5个以内，除非任务确实很复杂可以在大于5个，但最多不能超过10个。\n\n");
+        sb.append("6. 步骤的 input 中如需引用前序步骤的输出，必须使用 {stepX.output} 格式的占位符，不要把前序步骤的完整输出直接写在 input 中。\n");
+        sb.append("   示例：\"carData\": \"{step1.output}\" 而不是 \"carData\": \"（这里写几万字的完整分析报告）\"\n");
 
 
         // ========= 检查点规则（新增，融合到原有逻辑中） =========

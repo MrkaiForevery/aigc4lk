@@ -8,6 +8,7 @@ import com.air.commander.model.MemoryContext;
 import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.Step;
 import com.air.commander.resilience.ResilienceManager;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -183,32 +184,17 @@ public class GraphExecutor {
     }
 
     private ExecutionResult executeSingleStep(Step step,
-                                              Map<String, Object> context,
+                                              Map<String, Object> runtimeContext,
                                               String threadId,
                                               String userId,
                                               Map<String, String> tokens,
                                               String xid,
                                               MemoryContext memoryCtx) {
         return switch (step.getType()) {
-            case A2A_DELEGATE -> a2aRouter.callAgent(step, context, tokens, threadId, xid, memoryCtx);
+            case A2A_DELEGATE -> doA2ADelegateLogic(step, runtimeContext, threadId, tokens, xid, memoryCtx);
             case LLM_CALL -> {
                 try {
-                    // 1. 构建 Prompt：使用 step 中的 task 或 input
-                    String prompt = promptManagerBuilder.buildGraphExecutorLLMStepPrompt(step, context, memoryCtx);
-
-                    // 2. 调用模型（带弹性保护）
-                    String llmOutput = resilience.executeWithFullProtection(
-                            "llm-step-call",
-                            () -> easyChatClient.prompt(prompt).call().content(),
-                            () -> "LLM调用降级，返回默认回复"
-                    );
-
-                    // 3. 返回结果
-                    yield ExecutionResult.builder()
-                            .stepId(step.getId())
-                            .success(true)
-                            .output(Map.of("content", llmOutput))
-                            .build();
+                    yield doLLMCallLogic(step, runtimeContext, memoryCtx);
                 } catch (Exception e) {
                     log.error("LLM步骤执行失败: stepId={}", step.getId(), e);
                     yield ExecutionResult.builder()
@@ -218,15 +204,78 @@ public class GraphExecutor {
                             .build();
                 }
             }
-            case INTERRUPT -> ExecutionResult.builder()
-                    .stepId(step.getId())
-                    .success(false)
-                    .command(ExecutionResult.Command.builder()
-                            .type("REQUEST_CONFIRM")
-                            .message(step.getQuestion())
-                            .requiredScopes(List.of())
-                            .build())
-                    .build();
+            case INTERRUPT -> doInterruptLogic(step,runtimeContext);
         };
+    }
+
+    private ExecutionResult doA2ADelegateLogic(Step step, Map<String, Object> runtimeContext, String threadId, Map<String, String> tokens, String xid, MemoryContext memoryCtx) {
+        return a2aRouter.callAgent(step, runtimeContext, tokens, threadId, xid, memoryCtx);
+    }
+
+    private  ExecutionResult doInterruptLogic(Step step, Map<String, Object> runtimeContext) {
+        // 1. 收集前序步骤的最新输出（供用户参考）
+        Map<String, Object> previewOutput = new HashMap<>();
+        if (!runtimeContext.isEmpty()) {
+            // 取最后一个步骤的输出（假设 context 的 key 是 stepId.output 格式）
+            String lastOutputKey = runtimeContext.keySet().stream()
+                    .filter(k -> k.endsWith(".output"))
+                    .reduce((first, second) -> second) // 取最后一个
+                    .orElse(null);
+            if (lastOutputKey != null) {
+                previewOutput.put("previousStepOutput", runtimeContext.get(lastOutputKey));
+            }
+        }
+
+        // 2. 构建中断命令
+        ExecutionResult.Command.CommandBuilder commandBuilder = ExecutionResult.Command.builder();
+        if (step.getCheckpoint() != null) {
+            // 使用 CheckpointConfig
+            Step.CheckpointConfig cp = step.getCheckpoint();
+            String commandType = cp.getType() == Step.CheckpointConfig.CheckpointType.CREDENTIAL
+                    ? "REQUEST_CREDENTIAL" : "REQUEST_CONFIRM";
+            commandBuilder.type(commandType)
+                    .message(cp.getQuestion() != null ? cp.getQuestion() : step.getQuestion())
+                    .requiredScopes(cp.getRequiredScopes() != null ? cp.getRequiredScopes() : List.of());
+        } else {
+            // 兼容旧版简单中断
+            commandBuilder.type("REQUEST_CONFIRM")
+                    .message(step.getQuestion())
+                    .requiredScopes(List.of());
+        }
+        previewOutput.put("question", commandBuilder.build().getMessage()); // 也把问题本身放入输出
+
+        // 3. 返回“等待用户操作”的结果
+        return ExecutionResult.builder()
+                .stepId(step.getId())
+                .success(false)          // 步骤未完成，但并非错误
+                .command(commandBuilder.build())
+                .output(previewOutput)   // 携带前序输出供前端展示
+                .build();
+    }
+
+    private ExecutionResult doLLMCallLogic(Step step, Map<String, Object> runtimeContext, MemoryContext memoryCtx) {
+        // 1. 构建 Prompt：使用 step 中的 task 或 input
+        String prompt = null;
+        try {
+            prompt = promptManagerBuilder.buildGraphExecutorLLMStepPrompt(step, runtimeContext, memoryCtx);
+        } catch (JsonProcessingException e) {
+            log.error("构建LLMCall的prompt提示词失败！！");
+            throw new RuntimeException(e);
+        }
+
+        // 2. 调用模型（带弹性保护）
+        String finalPrompt = prompt;
+        String llmOutput = resilience.executeWithFullProtection(
+                "llm-step-call",
+                () -> easyChatClient.prompt(finalPrompt).call().content(),
+                () -> "LLM调用降级，返回默认回复"
+        );
+
+        // 3. 返回结果
+        return ExecutionResult.builder()
+                .stepId(step.getId())
+                .success(true)
+                .output(Map.of("content", llmOutput))
+                .build();
     }
 }
