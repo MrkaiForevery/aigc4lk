@@ -54,6 +54,13 @@ public class InterruptHandler {
         try {
             // 1. 冻结分布式事务
             GlobalTransaction tx = GlobalTransactionContext.getCurrent();
+            if (tx == null) {
+                log.error("无法挂起事务：当前无活动全局事务，xid={}", xid);
+                // 清理可能残留的中断上下文
+                redissonClient.getBucket("interrupt:" + xid).delete();
+                return; // 直接返回，不抛异常
+            }
+
             SuspendedResourcesHolder holder = tx.suspend();
 
             // 2. 构建检查点上下文

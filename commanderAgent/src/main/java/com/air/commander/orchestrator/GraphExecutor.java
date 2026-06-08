@@ -204,7 +204,7 @@ public class GraphExecutor {
                             .build();
                 }
             }
-            case INTERRUPT -> doInterruptLogic(step,runtimeContext);
+            case INTERRUPT -> doInterruptLogic(step, runtimeContext);
         };
     }
 
@@ -212,7 +212,7 @@ public class GraphExecutor {
         return a2aRouter.callAgent(step, runtimeContext, tokens, threadId, xid, memoryCtx);
     }
 
-    private  ExecutionResult doInterruptLogic(Step step, Map<String, Object> runtimeContext) {
+    private ExecutionResult doInterruptLogic(Step step, Map<String, Object> runtimeContext) {
         // 1. 收集前序步骤的最新输出（供用户参考）
         Map<String, Object> previewOutput = new HashMap<>();
         if (!runtimeContext.isEmpty()) {

@@ -79,9 +79,11 @@ public class PromptManagerBuilder {
      */
     public String buildGraphExecutorLLMStepPrompt(Step step, Map<String, Object> context, MemoryContext memoryCtx) throws JsonProcessingException {
         StringBuilder sb = new StringBuilder();
-        // ========= 1. 任务描述 =========
+        log.info("LLM步骤 {} 的 context keys: {}", step.getId(), context.keySet());
+        // ========= 1. 任务描述（解析占位符） =========
         sb.append("【任务】\n");
-        sb.append(step.getTask()).append("\n\n");
+        String resolvedTask = replacePlaceholders(step.getTask(), context);
+        sb.append(resolvedTask).append("\n\n");
 
         // ========= 2. 输入数据（已解析占位符） =========
         if (step.getInput() != null && !step.getInput().isEmpty()) {
@@ -198,7 +200,7 @@ public class PromptManagerBuilder {
     /**
      * 替换字符串中所有 {key} 占位符为上下文中的字符串值
      */
-    private String replacePlaceholders(String template, Map<String, Object> context) {
+    public String replacePlaceholders(String template, Map<String, Object> context) {
         Pattern pattern = Pattern.compile("\\{([^}]+)\\}");
         Matcher matcher = pattern.matcher(template);
         StringBuilder sb = new StringBuilder();
@@ -294,6 +296,9 @@ public class PromptManagerBuilder {
         sb.append("5. 尽量将步骤数量控制少于或等于5个以内，除非任务确实很复杂可以在大于5个，但最多不能超过10个。\n\n");
         sb.append("6. 步骤的 input 中如需引用前序步骤的输出，必须使用 {stepX.output} 格式的占位符，不要把前序步骤的完整输出直接写在 input 中。\n");
         sb.append("   示例：\"carData\": \"{step1.output}\" 而不是 \"carData\": \"（这里写几万字的完整分析报告）\"\n");
+        sb.append("7. 如果某个步骤的 input 中已经包含了前序步骤的完整输出数据，那么该步骤的 task 应该描述如何处理这些数据，而不是重新获取或搜索相同的内容。\n");
+        sb.append("   例如：如果 step2 已经输出了10款车型的口碑评价，step3 的 task 应为 \"根据已有的口碑评价精选2款最佳车型\"，而不是 \"搜索口碑评价\"。\n");
+        sb.append("8. 必须确保每个步骤的 task 与其 input 中的数据相匹配，不要描述与 input 内容重复或冲突的动作。\n");
 
 
         // ========= 检查点规则（新增，融合到原有逻辑中） =========

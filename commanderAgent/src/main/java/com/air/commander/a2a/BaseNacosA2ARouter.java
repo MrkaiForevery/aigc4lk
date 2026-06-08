@@ -1,6 +1,7 @@
 package com.air.commander.a2a;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.air.commander.Prompt.PromptManagerBuilder;
 import com.air.commander.model.*;
 import com.air.commander.resilience.ResilienceManager;
 import com.alibaba.cloud.ai.a2a.registry.nacos.discovery.NacosAgentCardProvider;
@@ -53,13 +54,15 @@ public class BaseNacosA2ARouter {
     private final ResilienceManager resilience;
     private final ObjectMapper objectMapper;
     private final RestClient restClient; // 单例
+    private final PromptManagerBuilder promptManagerBuilder;
 
     @Autowired
     public BaseNacosA2ARouter(DiscoveryClient discoveryClient,
                               NacosAgentCardProvider nacosAgentCardProvider,
                               ResilienceManager resilience,
                               ObjectMapper objectMapper,
-                              RestClient.Builder restClientBuilder) {   // 注入 Spring 管理的 ObjectMapper
+                              RestClient.Builder restClientBuilder,
+                              PromptManagerBuilder promptManagerBuilder) {   // 注入 Spring 管理的 ObjectMapper
         this.discoveryClient = discoveryClient;
         this.agentCardProvider = nacosAgentCardProvider;
         this.resilience = resilience;
@@ -67,6 +70,7 @@ public class BaseNacosA2ARouter {
         this.objectMapper = objectMapper;
         // 构建并复用RestClient实例
         this.restClient = restClientBuilder.build();
+        this.promptManagerBuilder = promptManagerBuilder;
         ;
     }
 
@@ -177,6 +181,7 @@ public class BaseNacosA2ARouter {
                     return ExecutionResult.builder()
                             .stepId(step.getId())
                             .success(false)
+                            .output(Map.of("content", "Agent 调用暂时不可用，已跳过此步骤"))
                             .error("A2A Agent调用降级")
                             .build();
                 }
@@ -336,20 +341,23 @@ public class BaseNacosA2ARouter {
      */
     private String buildAgentContent(Step step, Map<String, Object> context) {
         StringBuilder sb = new StringBuilder();
-        sb.append("【任务】\n");
-        sb.append(step.getTask()).append("\n\n");
 
+        // 1. 解析任务描述中的占位符（如 {step1.output}）
+        String resolvedTask = promptManagerBuilder.replacePlaceholders(step.getTask(), context);
+        sb.append("【任务】\n");
+        sb.append(resolvedTask).append("\n\n");
+
+        // 2. 输入数据（仅当有显式 input 时）
         if (step.getInput() != null && !step.getInput().isEmpty()) {
-            sb.append("【输入数据】\n");
             Map<String, Object> resolvedInput = resolveInput(step.getInput(), context);
+            sb.append("【输入数据】\n");
             for (Map.Entry<String, Object> entry : resolvedInput.entrySet()) {
                 String key = entry.getKey();
-                Object rawValue = entry.getValue();
-                String formattedValue = formatValue(rawValue);
-
-                // 每个字段单独一个区块，方便子Agent解析
+                Object value = entry.getValue();
+                // 如果值已经在 task 中完整展现了（比如与任务描述重复），可以选择性省略
+                // 这里简单全部输出
                 sb.append("--- ").append(key).append(" ---\n");
-                sb.append(formattedValue).append("\n\n");
+                sb.append(formatValue(value)).append("\n\n");
             }
         }
         return sb.toString();
