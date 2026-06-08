@@ -46,9 +46,6 @@ public class BaseNacosA2ARouter {
     private static final String PARAMS = "params";
     private static final String ID = "id";
 
-    // 预编译正则，用于解析输入中的占位符 {stepX.output}
-    private static final Pattern OUTPUT_REF_PATTERN = Pattern.compile("\\{.*\\.output\\}");
-
     private final DiscoveryClient discoveryClient;
     private final NacosAgentCardProvider agentCardProvider;
     private final ResilienceManager resilience;
@@ -207,22 +204,28 @@ public class BaseNacosA2ARouter {
      * 构建 A2A 标准消息
      */
     private static Message buildMessage(Step step, Map<String, String> tokens, String threadId, String xid, MemoryContext memoryCtx, TextPart textPart) {
+
+        // 只传递必要的元信息，不传递记忆上下文
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("threadId", threadId);
+        metadata.put("xid", xid != null ? xid : "");
+        metadata.put("stepId", step.getId());
+        metadata.put("credentialTokens", tokens != null ? tokens : Map.of());
+
+        // 按需传递记忆上下文（仅当步骤声明需要时）
+        if (step.isIncludeChatHistory() && memoryCtx.getRecentMessages() != null) {
+            // 只取最近3条有效消息
+            List<MemoryContext.Message> memoryContexts = memoryCtx.getRecentMessages().stream()
+                    .filter(msg -> !"done" .equals(msg.getContent()))
+                    .skip(Math.max(0, memoryCtx.getRecentMessages().size() - 3))
+                    .collect(Collectors.toList());
+            metadata.put("recentMessages", memoryContexts);
+        }
+
         Message userMessage = new Message.Builder()
                 .role(Message.Role.USER)
                 .parts(List.of(textPart))
-                .metadata(Map.of(
-                        "threadId", threadId,
-                        "xid", xid != null ? xid : "",
-                        "stepId", step.getId(),
-                        "task", step.getTask(),
-                        "credentialTokens", tokens != null ? tokens : Map.of(),
-                        "recentMessages", memoryCtx.getRecentMessages() != null ?
-                                memoryCtx.getRecentMessages() : List.of(),
-                        "userProfile", memoryCtx.getUserProfile() != null ?
-                                memoryCtx.getUserProfile() : Map.of(),
-                        "preferences", memoryCtx.getPreferences() != null ?
-                                memoryCtx.getPreferences() : Map.of()
-                ))
+                .metadata(metadata)
                 .build();
         return userMessage;
     }
@@ -344,20 +347,22 @@ public class BaseNacosA2ARouter {
 
         // 1. 解析任务描述中的占位符（如 {step1.output}）
         String resolvedTask = promptManagerBuilder.replacePlaceholders(step.getTask(), context);
-        sb.append("【任务】\n");
-        sb.append(resolvedTask).append("\n\n");
+        sb.append("【任务】\n").append(resolvedTask).append("\n\n");
 
         // 2. 输入数据（仅当有显式 input 时）
         if (step.getInput() != null && !step.getInput().isEmpty()) {
-            Map<String, Object> resolvedInput = resolveInput(step.getInput(), context);
-            sb.append("【输入数据】\n");
-            for (Map.Entry<String, Object> entry : resolvedInput.entrySet()) {
-                String key = entry.getKey();
-                Object value = entry.getValue();
-                // 如果值已经在 task 中完整展现了（比如与任务描述重复），可以选择性省略
-                // 这里简单全部输出
-                sb.append("--- ").append(key).append(" ---\n");
-                sb.append(formatValue(value)).append("\n\n");
+            //在顺序模式下执行LLM_CALL时，剔除用户的原始请求输入，避免大模型产生幻觉
+            boolean hasBusinessData = step.getInput().entrySet().stream()
+                    .anyMatch(entry -> !"userQuery".equals(entry.getKey()) && entry.getValue() != null);
+
+            if (hasBusinessData) {
+                sb.append("【输入数据】\n");
+                step.getInput().forEach((key, value) -> {
+                    if (!"userQuery".equals(key) && value != null) {
+                        sb.append("--- ").append(key).append(" ---\n");
+                        sb.append(formatValue(value)).append("\n\n");
+                    }
+                });
             }
         }
         return sb.toString();
@@ -389,40 +394,4 @@ public class BaseNacosA2ARouter {
         return str;
     }
 
-    /**
-     * 解析输入中的占位符引用（{stepX.output}），并对长文本进行截断
-     */
-    private Map<String, Object> resolveInput(Map<String, Object> input, Map<String, Object> context) {
-        if (input == null) return Map.of();
-        Map<String, Object> resolved = new HashMap<>();
-        for (Map.Entry<String, Object> entry : input.entrySet()) {
-            Object value = entry.getValue();
-            if (value instanceof String str && str.matches("\\{.*\\.output\\}")) {
-                String refKey = str.substring(1, str.length() - 1);
-                Object ctxValue = context.get(refKey);
-                // 递归展开（如果 ctxValue 本身也是 Map 且包含占位符，但通常不需要）
-                resolved.put(entry.getKey(), truncateIfNeeded(ctxValue));
-            } else {
-                resolved.put(entry.getKey(), value);
-            }
-        }
-        return resolved;
-    }
-
-    /**
-     * 对字符串值进行长度截断，防止请求体过大
-     */
-    private Object truncateIfNeeded(Object value) {
-        if (value instanceof String str) {
-            if (str.length() > 3000) {
-                return str.substring(0, 3000) + "\n...(内容过长已截断)";
-            }
-        } else if (value instanceof Map map) {
-            // 对Map递归截断（可选）
-            Map<String, Object> truncated = new HashMap<>();
-            map.forEach((k, v) -> truncated.put(k.toString(), truncateIfNeeded(v)));
-            return truncated;
-        }
-        return value;
-    }
 }

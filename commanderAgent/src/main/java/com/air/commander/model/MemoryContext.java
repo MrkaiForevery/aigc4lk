@@ -14,10 +14,17 @@ import java.util.Map;
 @Data
 @Builder
 public class MemoryContext {
+    // 新增：当前用户请求的原始文本
+    private String userQuery;
+
     private List<Message> recentMessages;
+
     private Map<String, Object> userProfile;
+
     private Map<String, String> preferences;
+
     private List<Map<String, Object>> similarCases;
+
     private List<String> knowledgeChunks;
 
     @Data

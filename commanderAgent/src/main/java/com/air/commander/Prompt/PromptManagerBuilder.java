@@ -80,39 +80,43 @@ public class PromptManagerBuilder {
     public String buildGraphExecutorLLMStepPrompt(Step step, Map<String, Object> context, MemoryContext memoryCtx) throws JsonProcessingException {
         StringBuilder sb = new StringBuilder();
         log.info("LLM步骤 {} 的 context keys: {}", step.getId(), context.keySet());
+
         // ========= 1. 任务描述（解析占位符） =========
-        sb.append("【任务】\n");
         String resolvedTask = replacePlaceholders(step.getTask(), context);
-        sb.append(resolvedTask).append("\n\n");
+        sb.append("【任务】\n").append(resolvedTask).append("\n\n");
 
         // ========= 2. 输入数据（已解析占位符） =========
         if (step.getInput() != null && !step.getInput().isEmpty()) {
             Map<String, Object> resolvedInput = resolveInput(step.getInput(), context);
-            sb.append("【输入数据】\n");
-            // 如果包含 userQuery，单独高亮展示
-            if (resolvedInput.containsKey("userQuery")) {
-                sb.append("用户原始请求：\n").append(resolvedInput.get("userQuery")).append("\n");
+            //在顺序模式下执行LLM_CALL时，剔除用户的原始请求输入，避免大模型产生幻觉
+            boolean hasBusinessData = resolvedInput.entrySet().stream()
+                    .anyMatch(entry -> !"userQuery".equals(entry.getKey()) && entry.getValue() != null);
+            if (hasBusinessData) {
+                sb.append("【输入数据】\n");
+                resolvedInput.forEach((key, value) -> {
+                    // 不再输出 userQuery
+                    if (!"userQuery".equals(key) && value != null) {
+                        sb.append(key).append(": ").append(formatValue(value)).append("\n");
+                    }
+                });
+                sb.append("\n");
             }
-            // 其他参数格式化输出
-            resolvedInput.forEach((key, value) -> {
-                if (!"userQuery" .equals(key)) {
-                    sb.append(key).append(": ").append(formatValue(value)).append("\n");
-                }
-            });
-            sb.append("\n");
         }
 
-        // ========= 3. 对话历史（只取最近 3 条，过滤占位符） =========
-        if (memoryCtx.getRecentMessages() != null && !memoryCtx.getRecentMessages().isEmpty()) {
-            String recent = memoryCtx.getRecentMessages().stream()
-                    .filter(msg -> !"done" .equals(msg.getContent()))   // 过滤无效消息
-                    .skip(Math.max(0, memoryCtx.getRecentMessages().size() - 3))
-                    .map(msg -> msg.getRole() + ": " + msg.getContent())
-                    .collect(Collectors.joining("\n"));
-            if (!recent.isEmpty()) {
-                sb.append("【对话历史】\n").append(recent).append("\n\n");
+        // ========= 3. 对话历史（只取最近 3 条，过滤占位符)=========
+        if (step.isIncludeChatHistory() && memoryCtx.getRecentMessages() != null) {
+            if (memoryCtx.getRecentMessages() != null && !memoryCtx.getRecentMessages().isEmpty()) {
+                String recent = memoryCtx.getRecentMessages().stream()
+                        .filter(msg -> !"done" .equals(msg.getContent()))   // 过滤无效消息
+                        .skip(Math.max(0, memoryCtx.getRecentMessages().size() - 3))
+                        .map(msg -> msg.getRole() + ": " + msg.getContent())
+                        .collect(Collectors.joining("\n"));
+                if (!recent.isEmpty()) {
+                    sb.append("【对话历史】\n").append(recent).append("\n\n");
+                }
             }
         }
+
 
         // ========= 4. 用户偏好 =========todo 先不注入这段提示词，污染大模型判断
 //        if (memoryCtx.getPreferences() != null && !memoryCtx.getPreferences().isEmpty()) {
@@ -299,46 +303,45 @@ public class PromptManagerBuilder {
         sb.append("7. 如果某个步骤的 input 中已经包含了前序步骤的完整输出数据，那么该步骤的 task 应该描述如何处理这些数据，而不是重新获取或搜索相同的内容。\n");
         sb.append("   例如：如果 step2 已经输出了10款车型的口碑评价，step3 的 task 应为 \"根据已有的口碑评价精选2款最佳车型\"，而不是 \"搜索口碑评价\"。\n");
         sb.append("8. 必须确保每个步骤的 task 与其 input 中的数据相匹配，不要描述与 input 内容重复或冲突的动作。\n");
-
+        sb.append("9. 如果某个 LLM_CALL 步骤需要结合用户之前的对话历史才能准确执行（例如“根据刚才讨论的内容进行总结”或“参考之前的对话回答”），\n");
+        sb.append("   请在 input 中设置 \"includeChatHistory\": true，否则不要包含此字段或设置为 false。\n\n");
 
         // ========= 检查点规则（新增，融合到原有逻辑中） =========
         sb.append("【检查点（人工干预）规则】\n");
         sb.append("你必须分析每个子任务的风险等级，判断是否需要插入 type=INTERRUPT 的步骤作为检查点，在关键操作前让用户确认或授权。\n\n");
-
         sb.append("以下情况必须插入 CREDENTIAL 类型检查点（需要用户授权权限）：\n");
         sb.append("  - 访问敏感数据或受保护资源（如财务数据、医疗记录、用户隐私信息）\n");
         sb.append("  - 调用需要特殊权限的 API 或系统（如财务系统、CRM系统）\n");
         sb.append("  - 示例：用户要求\"分析财务数据\"，在调用财务系统前插入授权检查点\n\n");
-
         sb.append("以下情况必须插入 CONFIRM 类型检查点（需要用户确认操作）：\n");
         sb.append("  - 执行不可逆操作（如发送邮件、扣款、发布内容、删除数据）\n");
         sb.append("  - 关键决策点，需要用户确认中间结果（如生成正式报告、执行重要分析）\n");
         sb.append("  - 输出结果可能产生重大影响（如发送给老板的报告、对外发布的内容）\n");
         sb.append("  - 示例：数据分析完成后，插入确认点让用户验证数据后再生成报告\n\n");
-
         sb.append("以下情况不需要检查点：\n");
         sb.append("  - 纯信息查询（如\"介绍一下最新的AI技术\"）\n");
         sb.append("  - 简单的文本生成或格式转换\n");
         sb.append("  - 用户明确表示\"直接执行\"或\"不需要确认\"\n\n");
-
         sb.append("如果不需要人工干预，则不要插入 INTERRUPT 步骤。\n\n");
 
-        // 1. 可用 Agent 列表（包含能力描述）
-        sb.append("=== 可用Agent ===\n");
+        sb.append("=== 可用 Agent 能力清单 ===\n");
+        sb.append("以下是当前所有可用的 Agent，请严格根据它们的技能分配任务。\n\n");
+        int index = 1;
         for (AgentCardWrapper agent : agents) {
-            sb.append("- ").append(agent.name());
+            sb.append("Agent ").append(index).append("：").append(agent.name()).append("\n");
             if (agent.description() != null && !agent.description().isBlank()) {
-                sb.append(": ").append(agent.description());
+                sb.append("  - 简介：").append(agent.description()).append("\n");
             }
             if (agent.skills() != null && !agent.skills().isEmpty()) {
-                String skillNames = agent.skills().stream()
-                        .map(AgentSkill::name)
-                        .collect(Collectors.joining(", "));
-                sb.append("，技能:").append(skillNames);
+                sb.append("  - 技能列表：\n");
+                agent.skills().forEach(skill -> sb.append("    · ").append(skill.name()).append("\n"));
+            } else {
+                sb.append("  - 技能列表：（无明确技能描述，可承担通用文本处理任务）\n");
             }
             sb.append("\n");
+            index++;
         }
-        sb.append("\n");
+        sb.append("注意：当 type 为 A2A_DELEGATE 时，agent 字段必须使用上述 Agent 名称之一。\n\n");
 
         // 2. 用户画像todo 先不拼这个，容易污染大模型意图
 //        if (ctx.getUserProfile() != null && !ctx.getUserProfile().isEmpty()) {
@@ -376,7 +379,6 @@ public class PromptManagerBuilder {
 //        }
 
         // ========= 输出格式要求（强制 JSON） =========
-        // ========= 输出格式要求（增强版，包含检查点字段） =========
         sb.append("你必须输出一个完整的 JSON 对象，包含以下字段：\n");
         sb.append("- executionMode: 字符串，取值必须是 SEQUENTIAL/PARALLEL/CONDITIONAL/ITERATIVE_CORRECTION/COMPETITIVE/PIPELINE 之一。\n");
         sb.append("- steps: 数组，每个元素是一个对象，包含：\n");
@@ -391,6 +393,7 @@ public class PromptManagerBuilder {
         sb.append("        - question: 向用户展示的问题\n");
         sb.append("        - requiredScopes: 字符串数组（CREDENTIAL 类型必填）\n");
         sb.append("        - timeoutMinutes: 超时分钟数，默认 30\n\n");
+        sb.append("    - includeChatHistory: 布尔值，仅当 type 为 LLM_CALL 且需要对话历史时才设置为 true，否则可省略或设为 false。\n\n");
 
         // ========= 正确示例（增强版，包含检查点） =========
         sb.append("【正确示例1：无检查点的简单任务】\n");
@@ -404,12 +407,47 @@ public class PromptManagerBuilder {
         sb.append("      \"type\": \"LLM_CALL\",\n");
         sb.append("      \"task\": \"检索并介绍当前最新的AI技术趋势\",\n");
         sb.append("      \"input\": {\"userQuery\": \"介绍一下最新的AI技术\"},\n");
+        sb.append("      \"includeChatHistory\": false,\n");
         sb.append("      \"dependsOn\": []\n");
         sb.append("    }\n");
         sb.append("  ]\n");
         sb.append("}\n\n");
 
-        sb.append("【正确示例2：包含检查点的敏感任务】\n");
+        sb.append("【正确示例1：无检查点的简单任务】\n");
+        sb.append("用户请求：\"介绍一下最新的AI技术\"\n");
+        sb.append("输出 JSON：\n");
+        sb.append("{\n");
+        sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
+        sb.append("  \"steps\": [\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step1\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"检索并介绍当前最新的AI技术趋势\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"介绍一下最新的AI技术\"},\n");
+        sb.append("      \"includeChatHistory\": false,\n");
+        sb.append("      \"dependsOn\": []\n");
+        sb.append("    }\n");
+        sb.append("  ]\n");
+        sb.append("}\n\n");
+
+        sb.append("【正确示例2：需要对话历史的 LLM 步骤】\n");
+        sb.append("用户请求：\"根据我们刚才讨论的内容，总结一下推荐的车型\"\n");
+        sb.append("输出 JSON：\n");
+        sb.append("{\n");
+        sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
+        sb.append("  \"steps\": [\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step1\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"根据对话历史中讨论的车型推荐，总结出最终的推荐列表\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"根据我们刚才讨论的内容，总结一下推荐的车型\"},\n");
+        sb.append("      \"includeChatHistory\": true,\n");
+        sb.append("      \"dependsOn\": []\n");
+        sb.append("    }\n");
+        sb.append("  ]\n");
+        sb.append("}\n\n");
+
+        sb.append("【正确示例3：包含检查点的敏感任务】\n");
         sb.append("用户请求：\"帮我分析财务数据并发送报告给老板\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");

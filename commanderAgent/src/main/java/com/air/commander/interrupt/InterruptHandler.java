@@ -84,7 +84,7 @@ public class InterruptHandler {
 
             // 3. 存入 Redis，30 分钟过期
             RBucket<InterruptContext> bucket = redissonClient.getBucket("interrupt:" + xid);
-            bucket.set(ctx, Duration.ofMinutes(30));
+            bucket.set(ctx, Duration.ofMinutes(60));
 
             log.info("检查点已创建: xid={}, stepId={}, type={}", xid, stepId, command.getType());
 

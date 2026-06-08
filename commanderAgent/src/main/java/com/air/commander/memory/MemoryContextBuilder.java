@@ -25,7 +25,7 @@ public class MemoryContextBuilder {
         List<MemoryContext.Message> recentMessages = resilience.executeWithCBAndTimeout(
                 "redis-session",
                 "memory-query",
-                () -> conversationManager.getRecentMessages(threadId, 20),
+                () -> conversationManager.getRecentMessages(threadId, 5),
                 () -> List.of()
         );
         Map<String, Object> profile = resilience.executeWithCBAndTimeout(
@@ -45,6 +45,7 @@ public class MemoryContextBuilder {
         );
 
         return MemoryContext.builder()
+                .userQuery(userInput)
                 .recentMessages(recentMessages)
                 .userProfile(profile)
                 .preferences(preferences)

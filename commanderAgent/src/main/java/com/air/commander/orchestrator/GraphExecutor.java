@@ -3,10 +3,7 @@ package com.air.commander.orchestrator;
 import com.air.commander.Prompt.PromptManagerBuilder;
 import com.air.commander.a2a.BaseNacosA2ARouter;
 import com.air.commander.interrupt.InterruptHandler;
-import com.air.commander.model.ExecutionResult;
-import com.air.commander.model.MemoryContext;
-import com.air.commander.model.OrchestrationPlan;
-import com.air.commander.model.Step;
+import com.air.commander.model.*;
 import com.air.commander.resilience.ResilienceManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +30,7 @@ public class GraphExecutor {
     private final ResilienceManager resilience;
 
     private final PromptManagerBuilder promptManagerBuilder;
+    private final DataContractEngine dataContractEngine;
 
     // 固定线程池，替代虚拟线程
     private final ExecutorService parallelExecutor;
@@ -43,14 +41,15 @@ public class GraphExecutor {
                          InterruptHandler interruptHandler,
                          GraphBuilder graphBuilder,
                          ResilienceManager resilience,
-                         ObjectMapper objectMapper,
-                         PromptManagerBuilder promptManagerBuilder) {
+                         PromptManagerBuilder promptManagerBuilder,
+                         DataContractEngine dataContractEngine) {
         this.a2aRouter = a2aRouter;
         this.easyChatClient = easyChatClient;
         this.interruptHandler = interruptHandler;
         this.graphBuilder = graphBuilder;
         this.resilience = resilience;
         this.promptManagerBuilder = promptManagerBuilder;
+        this.dataContractEngine = dataContractEngine;
         this.parallelExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }
 
@@ -79,37 +78,74 @@ public class GraphExecutor {
                                                     MemoryContext memoryCtx) {
         List<Step> orderedSteps = graphBuilder.buildExecutionOrder(plan);
         Map<String, Object> runtimeContext = new ConcurrentHashMap<>();
+
+        // 注入 userQuery 到全局上下文
+        if (memoryCtx != null && memoryCtx.getUserQuery() != null) {
+            runtimeContext.put("userQuery", memoryCtx.getUserQuery());
+        }
+
         List<ExecutionResult> results = new ArrayList<>();
 
         for (int i = 0; i < orderedSteps.size(); i++) {
             Step step = orderedSteps.get(i);
-            ExecutionResult r = executeSingleStep(step, runtimeContext, threadId, userId, tokens, xid, memoryCtx);
+            //获取通过数据引擎处理过的Step
+            Step enrichedStep = getEnrichedStep(step, runtimeContext);
+
+            ExecutionResult r = executeSingleStep(enrichedStep, runtimeContext, threadId, userId, tokens, xid, memoryCtx);
             results.add(r);
+
+            // 使用 DataContractEngine 决定失败策略
+            StepDataContract.FailurePolicy policy = dataContractEngine.getFailurePolicy(step);
 
             // ============ 检查点逻辑 ============
             if (r.getCommand() != null) {
                 // 情况1：遇到 INTERRUPT 步骤，创建检查点并暂停
                 log.info("触发检查点: stepId={}, command={}", step.getId(), r.getCommand().getType());
-                interruptHandler.suspend(
-                        xid, userId, threadId, step.getId(),
-                        plan, i, runtimeContext, r.getCommand()
+                interruptHandler.suspend(xid, userId, threadId, step.getId(), plan, i, runtimeContext, r.getCommand()
                 );
                 break;  // 暂停执行，等待用户响应
             }
 
-            if (!r.isSuccess() && step.isMandatory()) {
-                // 情况2：必选步骤失败，自动触发回滚
-                log.error("必选步骤失败，触发自动回滚: stepId={}", step.getId());
-                interruptHandler.rollback(xid);
-                break;
+            if (!r.isSuccess()) {
+                switch (policy) {
+                    case ROLLBACK_AND_STOP -> {
+                        log.error("必选步骤失败，触发回滚: stepId={}", step.getId());
+                        interruptHandler.rollback(xid);
+                        return results;
+                    }
+                    case SKIP_AND_CONTINUE -> {
+                        log.warn("步骤失败但跳过继续: stepId={}", step.getId());
+                    }
+                    case MARK_AS_FAILED -> {
+                        log.warn("步骤标记为失败: stepId={}", step.getId());
+                    }
+                }
             }
 
-            // 正常成功，更新运行时上下文
+            // 使用 DataContractEngine 注册输出
             if (r.isSuccess() && r.getOutput() != null) {
-                runtimeContext.put(step.getId() + ".output", r.getOutput());
+                dataContractEngine.publishOutput(step, r, runtimeContext);
             }
         }
         return results;
+    }
+
+    private Step getEnrichedStep(Step step, Map<String, Object> runtimeContext) {
+        // 使用 DataContractEngine 构建输入
+        Map<String, Object> stepInput = dataContractEngine.buildInput(step, runtimeContext);
+        // 将构建好的输入注入到 step 中（覆盖原有 input）
+        Step enrichedStep = Step.builder()
+                .id(step.getId())
+                .type(step.getType())
+                .agent(step.getAgent())
+                .task(step.getTask())
+                .input(stepInput)
+                .dependsOn(step.getDependsOn())
+                .mandatory(step.isMandatory())
+                .checkpoint(step.getCheckpoint())
+                .dataContract(step.getDataContract())
+                .build();
+        return enrichedStep;
     }
 
     private List<ExecutionResult> executeParallel(OrchestrationPlan plan,
@@ -265,17 +301,21 @@ public class GraphExecutor {
 
         // 2. 调用模型（带弹性保护）
         String finalPrompt = prompt;
+        long startTime = System.currentTimeMillis();
         String llmOutput = resilience.executeWithFullProtection(
                 "llm-step-call",
                 () -> easyChatClient.prompt(finalPrompt).call().content(),
                 () -> "LLM调用降级，返回默认回复"
         );
 
+        long endTime = System.currentTimeMillis();
+
         // 3. 返回结果
         return ExecutionResult.builder()
                 .stepId(step.getId())
                 .success(true)
                 .output(Map.of("content", llmOutput))
+                .durationMs(endTime-startTime)
                 .build();
     }
 }

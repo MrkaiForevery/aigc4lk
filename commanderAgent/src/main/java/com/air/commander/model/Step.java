@@ -57,6 +57,12 @@ public class Step {
      /**回滚保存点标识（用于模板中指定回滚起始位置）**/
     private String rollbackSavepoint;
 
+    /** 数据契约，定义输入输出规范**/
+    private StepDataContract dataContract;
+
+    /** 控制每一步LLM执行时是否需要读取用户历史的会话记忆,默认false不包含对话历史**/
+    private boolean includeChatHistory = false;
+
     @Data
     @Builder
     public static class CheckpointConfig {
