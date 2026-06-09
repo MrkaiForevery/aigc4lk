@@ -3,6 +3,7 @@ package com.air.commander.Prompt;
 import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.Step;
+import com.air.commander.orchestrator.CandidateGenerator;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,10 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,10 +33,10 @@ public class PromptManagerBuilder {
      */
     public String buildIntentClassifierVagueMatchesPrompt(String userInput, MemoryContext ctx, RemoteConfigLoader configLoader) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是一个意图分类助手。请根据以下信息判断用户请求属于哪个预定义场景。\n\n");
+        sb.append("你是一个意图分类助手。根据用户请求判断属于哪个预定义场景，并评估复杂度和风险。\n\n");
 
-        // 可用的预定义场景列表（从配置中动态获取）
-        sb.append("=== 预定义场景列表 ===\n");
+        // 预定义场景列表
+        sb.append("=== 预定义场景 ===\n");
         configLoader.getScenarioToTemplateId().keySet().forEach(scenario ->
                 sb.append("- ").append(scenario).append("\n")
         );
@@ -46,34 +44,48 @@ public class PromptManagerBuilder {
 
         // 用户画像
         if (ctx.getUserProfile() != null && !ctx.getUserProfile().isEmpty()) {
-            sb.append("=== 用户画像 ===\n");
-            sb.append(ctx.getUserProfile()).append("\n\n");
+            sb.append("=== 用户画像 ===\n").append(ctx.getUserProfile()).append("\n\n");
         }
 
         // 用户偏好
         if (ctx.getPreferences() != null && !ctx.getPreferences().isEmpty()) {
-            sb.append("=== 用户偏好 ===\n");
-            sb.append(ctx.getPreferences()).append("\n\n");
+            sb.append("=== 用户偏好 ===\n").append(ctx.getPreferences()).append("\n\n");
         }
 
-        // 仅取最近20条,在前面build这个ctx的时候就已经进行了条数处理
+        // 最近对话（取最近3条）
         if (ctx.getRecentMessages() != null && !ctx.getRecentMessages().isEmpty()) {
-            String recentMessages = ctx.getRecentMessages().stream()
+            String recent = ctx.getRecentMessages().stream()
+                    .filter(msg -> !"done".equals(msg.getContent()))
+                    .skip(Math.max(0, ctx.getRecentMessages().size() - 3))
                     .map(msg -> "- " + msg.getRole() + ": " + msg.getContent())
                     .collect(Collectors.joining("\n"));
-            sb.append("=== 最近对话 ===\n").append(recentMessages).append("\n\n");
+            if (!recent.isEmpty()) {
+                sb.append("=== 最近对话 ===\n").append(recent).append("\n\n");
+            }
         }
 
         // 当前请求
-        sb.append("=== 当前用户请求 ===\n");
-        sb.append(userInput).append("\n\n");
+        sb.append("=== 当前用户请求 ===\n").append(userInput).append("\n\n");
 
-        // 输出格式要求
+        // 复杂度评估标准
+        sb.append("【复杂度评估标准】\n");
+        sb.append("- 1-2：简单查询或单步任务\n");
+        sb.append("- 3：需要2-3个步骤或简单分析\n");
+        sb.append("- 4：需要多步分析、调用外部服务或涉及敏感数据\n");
+        sb.append("- 5：高度复杂，需要多个Agent协作或人工干预\n\n");
+
+        // 风险提示（辅助判断）
+        sb.append("【高风险信号】（如果出现以下情况，complexity至少为4，且可能需要检查点）\n");
+        sb.append("- 涉及财务、医疗、隐私等敏感数据\n");
+        sb.append("- 需要发送邮件、扣款、发布内容等不可逆操作\n");
+        sb.append("- 用户明确要求“确认”或“审核”\n\n");
+
+        // 输出格式
         sb.append("请以 JSON 格式返回（不要包含其他内容）：\n");
-        sb.append("{ \"predefined\": true/false, \"scenario\": \"场景标识（仅predefined=true时必填）\", \"complexity\": 1-5 }");
+        sb.append("{ \"predefined\": true/false, \"scenario\": \"场景标识（仅predefined=true时必填）\", \"complexity\": 1-5, \"highRisk\": true/false }");
+
         return sb.toString();
     }
-
     /**
      * GraphExecutor执行图流程时，当step步骤是LLM类型时需要的Prompt提示词
      */
@@ -502,5 +514,101 @@ public class PromptManagerBuilder {
         sb.append("直接输出 JSON，不要包含任何额外文字、注释或 Markdown 标记。");
 
         return sb.toString();
+    }
+
+
+    /**
+     * 在PlanEvaluator中LLM执行evaluate时所需要的提示词
+     */
+    public String buildEvaluationPrompt(List<CandidateGenerator.CandidatePlan> candidates,
+                                         String userInput, MemoryContext memoryCtx) {
+        StringBuilder sb = new StringBuilder();
+
+        // ========= 角色与任务 =========
+        sb.append("你是一个执行计划评审专家。请根据以下标准，从多个候选执行计划中选出最优的一个。\n");
+        sb.append("如果某个候选在关键维度上存在严重缺陷（如 Agent 误用），应直接给予低分，切勿选出。\n\n");
+
+        // ========= 用户需求 =========
+        sb.append("=== 用户需求 ===\n");
+        sb.append(userInput).append("\n\n");
+
+        // 选择性附上用户画像和偏好（避免噪声）
+//        if (memoryCtx != null) {
+//            if (memoryCtx.getUserProfile() != null && !memoryCtx.getUserProfile().isEmpty()) {
+//                sb.append("用户画像：").append(memoryCtx.getUserProfile()).append("\n");
+//            }
+//            if (memoryCtx.getPreferences() != null && !memoryCtx.getPreferences().isEmpty()) {
+//                sb.append("用户偏好：").append(memoryCtx.getPreferences()).append("\n");
+//            }
+//        }
+//        sb.append("\n");
+
+        // ========= 评估标准（强化常见错误警示） =========
+        sb.append("【评估标准】\n");
+        sb.append("1. Agent 准确性 (agentAccuracy)：Agent 的使用是否与可用 Agent 的能力严格匹配？\n");
+        sb.append("   - ⚠️ document-agent 只能用于文档生成、报告撰写，绝对不可用于网络搜索、数据收集。\n");
+        sb.append("   - 若某候选误将搜索任务分配给 document-agent，该维度应评为 1-3 分，且该候选不应成为 winner。\n");
+        sb.append("2. 数据流完整性 (dataFlow)：每个步骤的 input 是否包含了完成任务所需的数据？\n");
+        sb.append("   - 依赖前序步骤的步骤，input 中必须使用 {stepX.output} 引用前序输出。\n");
+        sb.append("3. 检查点合理性 (checkpoint)：高风险步骤或不可逆操作前是否合理插入了 INTERRUPT 检查点？\n");
+        sb.append("4. 步骤效率 (efficiency)：步骤数量是否适中（3~5 步为佳）？是否存在可以合并的冗余步骤？\n\n");
+
+        // ========= 候选计划展示（精简序列化） =========
+        sb.append("=== 候选计划 ===\n");
+        List<String> labels = new ArrayList<>();
+        for (int i = 0; i < candidates.size(); i++) {
+            CandidateGenerator.CandidatePlan c = candidates.get(i);
+            char label = (char) ('A' + i);
+            labels.add(String.valueOf(label));
+
+            sb.append("候选 ").append(label).append("（模型：").append(c.choseChatClientName()).append("）：\n");
+            try {
+                // 只序列化关键字段，避免输出大量 null
+                Map<String, Object> planMap = objectMapper.convertValue(c.plan(), Map.class);
+                // 去除所有 null 值的字段
+                removeNullValues(planMap);
+                sb.append(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(planMap));
+            } catch (Exception e) {
+                sb.append("（计划序列化失败）");
+            }
+            sb.append("\n\n");
+        }
+
+        // ========= 输出要求 =========
+        sb.append("请对上述 ").append(candidates.size()).append(" 个候选计划分别评分，并选出最优。\n");
+        sb.append("评分维度：agentAccuracy、dataFlow、checkpoint、efficiency，每项 1-10 分。\n");
+        sb.append("注意：若某候选 agentAccuracy 得分低于 5，则不应选为 winner。\n\n");
+
+        // 动态生成评分格式示例，避免尾随逗号
+        sb.append("输出 JSON 格式（不要包含其他内容）：\n");
+        sb.append("{\n");
+        sb.append("  \"winner\": \"胜出的候选标签\",\n");
+        sb.append("  \"scores\": {\n");
+        for (int i = 0; i < labels.size(); i++) {
+            String label = labels.get(i);
+            sb.append("    \"").append(label).append("\": {\"agentAccuracy\": 8, \"dataFlow\": 7, \"checkpoint\": 9, \"efficiency\": 8}");
+            // 最后一个对象不加逗号
+            if (i < labels.size() - 1) {
+                sb.append(",");
+            }
+            sb.append("\n");
+        }
+        sb.append("  },\n");
+        sb.append("  \"reason\": \"选择该候选的简要理由\"\n");
+        sb.append("}");
+
+        return sb.toString();
+    }
+
+    /**
+     * 递归移除 Map 中所有值为 null 的键值对，减少序列化噪音
+     */
+    private void removeNullValues(Map<String, Object> map) {
+        map.entrySet().removeIf(entry -> entry.getValue() == null);
+        for (Object value : map.values()) {
+            if (value instanceof Map) {
+                removeNullValues((Map<String, Object>) value);
+            }
+        }
     }
 }

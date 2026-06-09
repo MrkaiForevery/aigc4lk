@@ -24,6 +24,7 @@ public class IntentClassifier {
     private static final String FILED_PREDEFINED = "predefined";
     private static final String FILED_SCENARIO = "scenario";
     private static final String FILED_COMPLEXITY = "complexity";
+    private static final String FILED_HIGH_RISK = "highRisk";
 
     private final RemoteConfigLoader configLoader;
     private final ChatClient chatClient;
@@ -91,7 +92,7 @@ public class IntentClassifier {
             return extractIntent(responseMap);
         } catch (JsonProcessingException e) {
             log.error("解析 LLM 意图分类结果失败, 降级为动态编排", e);
-            return IntentResult.dynamic(3);
+            return IntentResult.dynamic(3,false);
         }
     }
 
@@ -100,6 +101,7 @@ public class IntentClassifier {
      */
     private IntentResult extractIntent(Map<String, Object> responseMap) {
         boolean predefined = Boolean.TRUE.equals(responseMap.get(FILED_PREDEFINED));
+        boolean highRisk = Boolean.TRUE.equals(responseMap.get(FILED_HIGH_RISK));
         int complexity = getComplexity(responseMap);
 
         if (predefined && responseMap.containsKey(FILED_SCENARIO)) {
@@ -107,12 +109,11 @@ public class IntentClassifier {
             String templateId = configLoader.getScenarioToTemplateId().get(scenario);
             if (templateId != null) {
                 log.info("LLM 匹配到预定义场景: scenario={}, templateId={}", scenario, templateId);
-                return IntentResult.template(scenario, templateId, complexity);
+                return IntentResult.template(scenario, templateId, complexity,highRisk);
             }
         }
-
         log.info("LLM 判断为非预定义场景，使用动态编排, complexity={}", complexity);
-        return IntentResult.dynamic(complexity);
+        return IntentResult.dynamic(complexity,highRisk);
     }
 
     /**
@@ -123,7 +124,6 @@ public class IntentClassifier {
         return value instanceof Number ? ((Number) value).intValue() : 3;
     }
 
-
     private IntentResult templateMatchesHard(String userInput) {
         IntentResult result = configLoader.getIntentRules().stream()
                 .filter(rule -> rule.matches(userInput))
@@ -131,7 +131,7 @@ public class IntentClassifier {
                     String templateId = configLoader.getScenarioToTemplateId().get(rule.scenario());
                     if (templateId != null) {
                         log.debug("硬规则匹配成功: scenario={}, templateId={}", rule.scenario(), templateId);
-                        return new IntentResult(true, rule.scenario(), templateId, rule.complexity());
+                        return new IntentResult(true, rule.scenario(), templateId, rule.complexity(), rule.highRisk());
                     }
                     return null;
                 })

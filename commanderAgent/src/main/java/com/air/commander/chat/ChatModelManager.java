@@ -20,8 +20,6 @@ public class ChatModelManager {
 
     private final RemoteConfigLoader configLoader;
     private static final String QWEN = "qwen";
-    private static final String QWEN_TURBO = "qwen-turbo";
-    private static final String QWEN_MAX = "qwen-max";
 
     // 手动构造器，只注入配置属性类
     public ChatModelManager(RemoteConfigLoader loader) {
@@ -40,7 +38,7 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(QWEN_TURBO)
+                        .withModel(SupportModeNameType.QWEN_TURBO.getModelName())
                         .withTemperature(0.5)
                         .build())
                 .build();
@@ -56,7 +54,7 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(QWEN_MAX)
+                        .withModel(SupportModeNameType.QWEN_LONG.getModelName())
                         .withTemperature(0.3)
                         .build())
                 .build();
@@ -64,6 +62,22 @@ public class ChatModelManager {
 
     @Bean("reasoningModelClient")
     public ChatClient reasoningModelClient(@Qualifier("reasoningModel") ChatModel reasoningModel) {
+        return ChatClient.builder(reasoningModel).build();
+    }
+
+    @Bean("plusModel")
+    public DashScopeChatModel plusModel(DashScopeApi api) {
+        return DashScopeChatModel.builder()
+                .dashScopeApi(api)
+                .defaultOptions(DashScopeChatOptions.builder()
+                        .withModel(SupportModeNameType.QWEN_PLUS.getModelName())
+                        .withTemperature(0.3)
+                        .build())
+                .build();
+    }
+
+    @Bean("plusModelClient")
+    public ChatClient plusModelClient(@Qualifier("plusModel") ChatModel reasoningModel) {
         return ChatClient.builder(reasoningModel).build();
     }
 }

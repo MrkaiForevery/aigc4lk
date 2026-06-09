@@ -21,6 +21,7 @@ public class IntentRulesProperties {
         private String scenario;
         private List<String> keywords;
         private int complexity;
+        private boolean highRisk;
 
         public boolean matches(String input) {
             return keywords != null && keywords.stream().anyMatch(input::contains);

@@ -72,12 +72,12 @@ public class RemoteConfigLoader {
      */
     public List<IntentRule> getIntentRules() {
         return intentProperties.getRules().stream()
-                .map(r -> new IntentRule(r.getScenario(), r.getKeywords(), r.getComplexity()))
+                .map(r -> new IntentRule(r.getScenario(), r.getKeywords(), r.getComplexity(),r.isHighRisk()))
                 .collect(Collectors.toList());
     }
 
     // 也可以直接返回属性对象，但为了最小改动，封装成原来的类型
-    public record IntentRule(String scenario, List<String> keywords, int complexity) {
+    public record IntentRule(String scenario, List<String> keywords, int complexity,boolean highRisk) {
         public boolean matches(String input) {
             return keywords != null && keywords.stream().anyMatch(input::contains);
         }

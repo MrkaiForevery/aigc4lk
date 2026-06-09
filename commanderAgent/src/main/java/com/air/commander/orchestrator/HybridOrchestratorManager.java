@@ -11,24 +11,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.seata.core.context.RootContext;
 import io.seata.spring.annotation.GlobalTransactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * 混合编排器
  * 核心编排逻辑句柄类
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
-public class HybridOrchestrator {
+public class HybridOrchestratorManager {
 
     private final MemoryContextBuilder memoryContextBuilder;
     private final IntentClassifier intentClassifier;
     private final TemplateExecutor templateExecutor;
-    private final DynamicOrchestrator dynamicOrchestrator;
+    private final CompetitionOrchestratorEngine competitionOrchestratorEngine;
     private final GraphExecutor graphExecutor;
     private final MemoryUpdatePipeline memoryUpdatePipeline;
     private final QualityAssessor qualityAssessor;
@@ -52,11 +55,12 @@ public class HybridOrchestrator {
         IntentResult intent = intentClassifier.classify(userInput, memoryCtx);
 
         // 3. 生成编排计划
-        OrchestrationPlan plan;
+       OrchestrationPlan plan;
         if (intent.isTemplate()) {
             plan = templateExecutor.loadAndPersonalize(intent.templateId(), userInput, memoryCtx);
         } else {
-            plan = dynamicOrchestrator.generatePlan(userInput, memoryCtx);
+            // 使用竞争式多LLM模型回答选择结果
+            plan = competitionOrchestratorEngine.generatePlan(userInput, memoryCtx);
         }
 
         // 4. 执行计划
@@ -64,13 +68,14 @@ public class HybridOrchestrator {
         List<ExecutionResult> results = graphExecutor.execute(plan, threadId, userId, tokens, xid, memoryCtx);
 
         // 5. 异步质量评估与记忆更新
+        final OrchestrationPlan finalPlan = plan;
         CompletableFuture.runAsync(() -> {
-            int score = qualityAssessor.evaluate(plan, results);
-            memoryUpdatePipeline.update(threadId, userId, plan, results, score, memoryCtx);
+            int score = qualityAssessor.evaluate(finalPlan, results);
+            memoryUpdatePipeline.update(threadId, userId, finalPlan, results, score, memoryCtx);
         });
 
         // 6. 构建返回结果
-        return ExecutionPlan.builder()
+        ExecutionPlan originalExecutedResult = ExecutionPlan.builder()
                 .mode(intent.isTemplate() ? ExecutionPlan.ModeType.TEMPLATE : ExecutionPlan.ModeType.DYNAMIC)
                 .planId(plan.getPlanId())
                 .results(results)
@@ -78,6 +83,8 @@ public class HybridOrchestrator {
                 .summary("Executed")
                 .xid(xid)
                 .build();
+
+        return trimResults(originalExecutedResult);
     }
 
     /**
@@ -182,4 +189,42 @@ public class HybridOrchestrator {
     public record ExecuteRequest(String userId, String threadId, String input, Map<String, String> tokens) {
     }
 
+
+    /**
+     * 精简 ExecutionPlan 中的 results，避免返回过大的响应体导致前端解析失败。
+     * - 对于中断步骤（包含 command），保留完整 output（含 previousStepOutput 和 question）。
+     * - 对于其他已完成步骤，仅保留 stepId 和 success 状态，移除庞大的 output 内容。
+     */
+    private ExecutionPlan trimResults(ExecutionPlan executionPlan) {
+        if (executionPlan == null || executionPlan.getResults() == null) {
+            return executionPlan;
+        }
+
+        List<ExecutionResult> trimmedResults = executionPlan.getResults().stream()
+                .map(result -> {
+                    // 如果是中断步骤（有 command），保留完整内容
+                    if (result.getCommand() != null) {
+                        return result;
+                    }
+                    // 否则只保留关键信息，删除大段输出
+                    return ExecutionResult.builder()
+                            .stepId(result.getStepId())
+                            .success(result.isSuccess())
+                            .output(Map.of("summary", "Step completed")) // 或直接 .output(null)
+                            .durationMs(result.getDurationMs())
+                            .error(result.getError())  // 如果有错误，保留错误信息
+                            .build();
+                })
+                .collect(Collectors.toList());
+
+        return ExecutionPlan.builder()
+                .mode(executionPlan.getMode())
+                .planId(executionPlan.getPlanId())
+                .results(trimmedResults)
+                .interrupted(executionPlan.isInterrupted())
+                .summary(executionPlan.getSummary())
+                .xid(executionPlan.getXid())
+                .context(executionPlan.getContext())
+                .build();
+    }
 }

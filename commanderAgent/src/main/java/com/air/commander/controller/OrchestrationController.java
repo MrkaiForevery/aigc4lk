@@ -2,7 +2,7 @@ package com.air.commander.controller;
 
 import com.air.commander.interrupt.InterruptHandler;
 import com.air.commander.model.ExecutionPlan;
-import com.air.commander.orchestrator.HybridOrchestrator;
+import com.air.commander.orchestrator.HybridOrchestratorManager;
 import io.seata.core.exception.TransactionException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -16,12 +16,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OrchestrationController {
 
-    private final HybridOrchestrator orchestrator;
+    private final HybridOrchestratorManager orchestrator;
     private final InterruptHandler interruptHandler;
 
     @PostMapping("/execute")
-    public ResponseEntity<ExecutionPlan> execute(@RequestBody HybridOrchestrator.ExecuteRequest req) {
-        return ResponseEntity.ok(orchestrator.execute(req));
+    public ResponseEntity<ExecutionPlan> execute(@RequestBody HybridOrchestratorManager.ExecuteRequest req) {
+        ExecutionPlan execute = orchestrator.execute(req);
+        return ResponseEntity.ok(execute);
     }
 
     @PostMapping("/interrupt/{xid}/respond")

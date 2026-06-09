@@ -2,6 +2,7 @@ package com.air.commander.orchestrator;
 
 import com.air.commander.Prompt.PromptManagerBuilder;
 import com.air.commander.a2a.BaseNacosA2ARouter;
+import com.air.commander.chat.SupportModeNameType;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.Step;
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -25,7 +27,7 @@ import java.util.stream.Collectors;
 @Component
 public class DynamicOrchestrator {
 
-    private final ChatClient chatClient;
+    private final ConcurrentHashMap<String,ChatClient> chatClientMaps = new ConcurrentHashMap<>();
     private final BaseNacosA2ARouter baseNacosA2ARouter;
     private final PlanValidator planValidator;
     private final ResilienceManager resilienceManager;
@@ -33,11 +35,15 @@ public class DynamicOrchestrator {
     private final PromptManagerBuilder promptManagerBuilder;
 
     public DynamicOrchestrator(@Qualifier("reasoningModelClient") ChatClient reasoningModelClient,
+                               @Qualifier("fastModelClient") ChatClient fastModelClient,
+                               @Qualifier("plusModelClient") ChatClient plusModelClient,
                                BaseNacosA2ARouter baseNacosA2ARouter,
                                PlanValidator planValidator,
                                ResilienceManager resilienceManager,
                                PromptManagerBuilder promptManagerBuilder) {
-        this.chatClient = reasoningModelClient;
+        chatClientMaps.put("reasoningModelClient",reasoningModelClient);
+        chatClientMaps.put("fastModelClient",fastModelClient);
+        chatClientMaps.put("plusModelClient",plusModelClient);
         this.baseNacosA2ARouter = baseNacosA2ARouter;
         this.planValidator = planValidator;
         this.resilienceManager = resilienceManager;
@@ -48,21 +54,21 @@ public class DynamicOrchestrator {
     /**
      * 调用复杂大模型生成任务得执行计划，且带有生成计划结果的校验逻辑，如果校验失败则需要重新生成执行计划，最多校验2次
      */
-    public OrchestrationPlan generatePlan(String userInput, MemoryContext memoryCtx) {
+    public OrchestrationPlan generatePlan(String userInput, MemoryContext memoryCtx, String choseChatClientBeanName) {
         // 1. 构建完整的 Prompt
         Set<AgentCardWrapper> availableAgents = baseNacosA2ARouter.getAvailableAgents();
         String prompt = promptManagerBuilder.buildDynamicOrchestratorGeneratePlanPrompt(
                 userInput, memoryCtx, availableAgents);
 
         // 2. 首次尝试生成计划（带保护）
-        OrchestrationPlan plan = tryBuildPlan(prompt);
+        OrchestrationPlan plan = tryBuildPlan(prompt,choseChatClientBeanName);
 
         // 3. 校验并重试
         ValidationResult vr = planValidator.validateOrchestrationPlan(plan);
         for (int retry = 0; retry < 2 && !vr.isValid(); retry++) {
             String errors = String.join("; ", vr.getErrors());
             String retryPrompt = prompt + "\n\n上次计划有误：" + errors + "\n请修正后重新生成。";
-            plan = tryBuildPlan(retryPrompt);  // 再次尝试
+            plan = tryBuildPlan(retryPrompt, choseChatClientBeanName);  // 再次尝试
             vr = planValidator.validateOrchestrationPlan(plan);
         }
 
@@ -74,7 +80,8 @@ public class DynamicOrchestrator {
     /**
      * 调用 LLM 生成计划并解析，失败时返回降级计划
      */
-    private OrchestrationPlan tryBuildPlan(String prompt) {
+    private OrchestrationPlan tryBuildPlan(String prompt, String choseChatClientBeanName) {
+        ChatClient chatClient = this.chatClientMaps.get(choseChatClientBeanName);
         String llmOutput = resilienceManager.executeWithFullProtection(
                 "llm-reasoning-model",
                 () -> chatClient.prompt(prompt).call().content(),
