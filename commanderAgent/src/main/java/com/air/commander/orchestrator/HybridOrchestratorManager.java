@@ -20,7 +20,6 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * 混合模式编排器
@@ -40,11 +39,8 @@ public class HybridOrchestratorManager {
     private final GraphExecutor graphExecutor;
     private final MemoryUpdatePipeline memoryUpdatePipeline;
     private final QualityAssessor qualityAssessor;
-    private final InterruptHandler interruptHandler;
     private final RedissonClient redissonClient;
     private final ObjectMapper objectMapper;
-    private final CredentialService credentialService;
-    private final GraphBuilder graphBuilder;
 
     @GlobalTransactional(timeoutMills = 1800000)
     public ExecutionPlan execute(ExecuteRequest request) {
@@ -70,7 +66,7 @@ public class HybridOrchestratorManager {
             plan.setMode(ExecutionPlan.ModeType.DYNAMIC);
         }
 
-        // 4. 执行计划
+        // 4. 执行编排好的计划
         String xid = RootContext.getXID();
         List<ExecutionResult> results = graphExecutor.execute(plan, threadId, userId, tokens, xid, memoryCtx);
 
@@ -98,35 +94,53 @@ public class HybridOrchestratorManager {
      * 从中断点恢复执行（检查点恢复）
      */
     public ExecutionPlan resumeExecution(String xid, Map<String, String> tokens) {
-        //从redis上获取checkPoint信息
         InterruptContext ctx = loadCheckpoint(xid);
-        //兜底:重复绑定事务id
         RootContext.bind(xid);
 
         try {
-            //序列化plan
             OrchestrationPlan plan = deserializePlan(ctx.getPlanJson());
-            //还原所有的step步骤
-            List<Step> allSteps = graphBuilder.buildExecutionOrder(plan);
+            Map<String, Object> runtimeContext = ctx.getRuntimeContext();
 
-            //如果现在的checkPoint是最后一个step，直接返回
-            if (hasNoRemainingSteps(ctx, allSteps)) {
+            // 【改动】基于 runtimeContext 找出剩余步骤，而不是用 stepIndex 截取
+            List<Step> remainingSteps = getRemainingSteps(plan.getSteps(), runtimeContext);
+
+            if (remainingSteps.isEmpty()) {
                 commitTransaction(xid);
-                return buildFinalResult(plan, ctx, allSteps, Collections.emptyList(), xid);
+                return buildFinalResult(plan, ctx, plan.getSteps(), Collections.emptyList(), xid);
             }
 
-            //继续执行后续步骤
-            List<ExecutionResult> newResults = executeRemainingSteps(plan, ctx, allSteps, tokens, xid);
+            // 保留原执行模式，不强制改为顺序
+            OrchestrationPlan remainingPlan = OrchestrationPlan.builder()
+                    .planId(plan.getPlanId())
+                    .executionMode(plan.getExecutionMode())  // 保留原模式
+                    .steps(remainingSteps)
+                    .build();
 
-            //对结果进行判断，是否回滚或者提交事务
-            return buildFinalResult(plan, ctx, allSteps, newResults, xid);
+            MemoryContext memoryCtx = memoryContextBuilder.build(ctx.getUserId(), ctx.getThreadId(), "");
+            List<ExecutionResult> newResults = graphExecutor.execute(
+                    remainingPlan,
+                    ctx.getThreadId(), ctx.getUserId(),
+                    tokens, xid, memoryCtx,
+                    runtimeContext
+            );
+
+            return buildFinalResult(plan, ctx, plan.getSteps(), newResults, xid);
         } finally {
-            //释放此次currentCheckPoint分布式全局事务锁
             RootContext.unbind();
-            //释放redis里面currentCheckPoint信息
             redissonClient.getBucket("interrupt:" + xid).delete();
         }
     }
+
+    /**
+     * 基于 runtimeContext 找出未完成的步骤
+     * 不依赖 stepIndex，兼容顺序和并行模式
+     */
+    private List<Step> getRemainingSteps(List<Step> allSteps, Map<String, Object> runtimeContext) {
+        return allSteps.stream()
+                .filter(step -> !runtimeContext.containsKey(step.getId() + ".output"))
+                .collect(Collectors.toList());
+    }
+
 
     // 委托和封装方法
     private InterruptContext loadCheckpoint(String xid) {
@@ -143,32 +157,6 @@ public class HybridOrchestratorManager {
         } catch (Exception e) {
             throw new RuntimeException("无法反序列化编排计划", e);
         }
-    }
-
-    private boolean hasNoRemainingSteps(InterruptContext ctx, List<Step> allSteps) {
-        return ctx.getStepIndex() + 1 >= allSteps.size();
-    }
-
-    private List<ExecutionResult> executeRemainingSteps(OrchestrationPlan plan, InterruptContext ctx, List<Step> allSteps, Map<String, String> tokens, String xid) {
-        List<Step> remainingSteps = allSteps.subList(ctx.getStepIndex() + 1, allSteps.size());
-
-        OrchestrationPlan remainingPlan = OrchestrationPlan.builder()
-                .planId(plan.getPlanId())
-                .executionMode(plan.getExecutionMode())
-                .steps(remainingSteps)
-                .build();
-
-        MemoryContext memoryCtx = memoryContextBuilder.build(ctx.getUserId(), ctx.getThreadId(), "");
-
-        return graphExecutor.execute(
-                remainingPlan,
-                ctx.getThreadId(),
-                ctx.getUserId(),
-                tokens,
-                xid,
-                memoryCtx,
-                ctx.getRuntimeContext()
-        );
     }
 
     private ExecutionPlan buildFinalResult(OrchestrationPlan plan, InterruptContext ctx, List<Step> allSteps, List<ExecutionResult> newResults, String xid) {
@@ -203,40 +191,38 @@ public class HybridOrchestratorManager {
      */
     private ExecutionPlan buildMergedPlan(OrchestrationPlan plan,
                                           InterruptContext ctx,
-                                          List<Step> orderedSteps,
+                                          List<Step> allSteps,
                                           List<ExecutionResult> newResults,
                                           String xid) {
         Map<String, Object> runtimeContext = ctx.getRuntimeContext();
+        List<ExecutionResult> allResults = new ArrayList<>();
 
-        // 1. 构建已完成步骤的结果（包括中断步骤）
-        List<ExecutionResult> previousResults = IntStream.rangeClosed(0, ctx.getStepIndex())
-                .mapToObj(i -> {
-                    Step step = orderedSteps.get(i);
-                    if (step.getId().equals(ctx.getCurrentStepId())) {
-                        // 中断步骤本身
-                        return ExecutionResult.builder()
-                                .stepId(step.getId())
-                                .success(false)
-                                .command(ExecutionResult.Command.builder()
-                                        .type(ctx.getCommandType())
-                                        .message(ctx.getQuestion())
-                                        .requiredScopes(ctx.getRequiredScopes())
-                                        .build())
-                                .build();
-                    } else {
-                        // 已完成步骤，从上下文取输出
-                        Object output = runtimeContext.get(step.getId() + ".output");
-                        return ExecutionResult.builder()
-                                .stepId(step.getId())
-                                .success(true)
-                                .output(output instanceof Map ? (Map<String, Object>) output : null)
-                                .build();
-                    }
-                })
-                .collect(Collectors.toList());
+        // 【改动】遍历所有步骤，通过 runtimeContext 判断是否已完成
+        for (Step step : allSteps) {
+            String outputKey = step.getId() + ".output";
+            if (runtimeContext.containsKey(outputKey)) {
+                // 已完成步骤，从上下文取输出
+                allResults.add(ExecutionResult.builder()
+                        .stepId(step.getId())
+                        .success(true)
+                        .output(runtimeContext.get(outputKey) instanceof Map ?
+                                (Map<String, Object>) runtimeContext.get(outputKey) : null)
+                        .build());
+            } else if (step.getId().equals(ctx.getCurrentStepId())) {
+                // 中断步骤本身
+                allResults.add(ExecutionResult.builder()
+                        .stepId(step.getId())
+                        .success(false)
+                        .command(ExecutionResult.Command.builder()
+                                .type(ctx.getCommandType())
+                                .message(ctx.getQuestion())
+                                .requiredScopes(ctx.getRequiredScopes())
+                                .build())
+                        .build());
+            }
+            // 其他未完成的步骤不加入结果，等恢复后由 newResults 补充
+        }
 
-        // 2. 合并所有结果
-        List<ExecutionResult> allResults = new ArrayList<>(previousResults);
         allResults.addAll(newResults);
 
         return ExecutionPlan.builder()

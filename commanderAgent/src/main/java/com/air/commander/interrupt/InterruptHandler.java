@@ -98,6 +98,7 @@ public class InterruptHandler {
 
         // 2. 获取用户授权的 Token
         Map<String, String> tokens = credentialService.approve(ctx.getUserId(), approvedScopes);
+        //todo 这里增加token校验逻辑，如果解析token失败，则直接返回没有权限
 
         // 3. 恢复全局事务：重新绑定 XID 到当前线程
         RootContext.bind(xid);

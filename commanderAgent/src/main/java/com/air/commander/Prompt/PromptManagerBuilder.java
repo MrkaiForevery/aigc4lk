@@ -216,13 +216,13 @@ public class PromptManagerBuilder {
     /**
      * 替换字符串中所有 {key} 占位符为上下文中的字符串值
      */
-    public String replacePlaceholders(String template, Map<String, Object> context) {
+    public String replacePlaceholders(String template, Map<String, Object> runtimeContext) {
         Pattern pattern = Pattern.compile("\\{([^}]+)\\}");
         Matcher matcher = pattern.matcher(template);
         StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
             String refKey = matcher.group(1);
-            Object ctxValue = context.get(refKey);
+            Object ctxValue = runtimeContext.get(refKey);
             String replacement;
             if (ctxValue != null) {
                 replacement = ctxValue.toString();   // 转为字符串嵌入

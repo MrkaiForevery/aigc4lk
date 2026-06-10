@@ -1,7 +1,6 @@
 package com.air.commander.controller;
 
 import com.air.commander.interrupt.InterruptActionFaced;
-import com.air.commander.interrupt.InterruptHandler;
 import com.air.commander.model.ExecutionPlan;
 import com.air.commander.orchestrator.HybridOrchestratorManager;
 import io.seata.core.exception.TransactionException;
@@ -9,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController

@@ -87,7 +87,7 @@ public class GraphExecutor {
                                                     String xid,
                                                     MemoryContext memoryCtx,
                                                     Map<String, Object> runtimeContext) {
-        List<Step> orderedSteps = graphBuilder.buildExecutionOrder(plan);
+        List<Step> orderedSteps = graphBuilder.buildSequentialExecutionOrder(plan);
 
         // 注入 userQuery 到全局上下文
         if (memoryCtx != null && memoryCtx.getUserQuery() != null) {
@@ -98,48 +98,60 @@ public class GraphExecutor {
 
         for (int i = 0; i < orderedSteps.size(); i++) {
             Step step = orderedSteps.get(i);
-            //获取通过数据引擎处理过的Step
-            Step enrichedStep = getEnrichedStep(step, runtimeContext);
-
-            ExecutionResult r = executeSingleStep(enrichedStep, runtimeContext, threadId, userId, tokens, xid, memoryCtx);
+            ExecutionResult r = executeSingleStep(step, runtimeContext, threadId, userId, tokens, xid, memoryCtx);
             results.add(r);
 
-            // 使用 DataContractEngine 决定失败策略
-            StepDataContract.FailurePolicy policy = dataContractEngine.getFailurePolicy(step);
-
-            // ============ 检查点逻辑 ============
-            if (r.getCommand() != null) {
-                // 情况1：遇到 INTERRUPT 步骤，创建检查点并暂停
-                log.info("触发检查点: stepId={}, command={}", step.getId(), r.getCommand().getType());
-                interruptHandler.suspend(xid, userId, threadId, step.getId(), plan, i, runtimeContext, r.getCommand()
-                );
-                break;  // 暂停执行，等待用户响应
-            }
-
-            if (!r.isSuccess()) {
-                switch (policy) {
-                    case ROLLBACK_AND_STOP -> {
-                        log.error("必选步骤失败，触发回滚: stepId={}", step.getId());
-                        interruptHandler.rollback(xid);
-                        return results;
-                    }
-                    case SKIP_AND_CONTINUE -> {
-                        log.warn("步骤失败但跳过继续: stepId={}", step.getId());
-                    }
-                    case MARK_AS_FAILED -> {
-                        log.warn("步骤标记为失败: stepId={}", step.getId());
-                    }
-                }
-            }
-
-            // 使用 DataContractEngine 注册输出
-            if (r.isSuccess() && r.getOutput() != null) {
-                dataContractEngine.publishOutput(step, r, runtimeContext);
+            if (!postProcessStepResult(r, step, runtimeContext, plan, i, xid, userId, threadId)) {
+                break; // 中断或回滚，停止执行
             }
         }
         return results;
     }
 
+    /**
+     * 单步执行后的统一后处理
+     * 包含：输出注册、中断检查、失败策略处理
+     *
+     * @return true = 正常继续，false = 需要停止执行（中断或回滚）
+     */
+    private boolean postProcessStepResult(ExecutionResult r, Step step,
+                                          Map<String, Object> runtimeContext,
+                                          OrchestrationPlan plan, int stepIndex,
+                                          String xid, String userId, String threadId) {
+        // 1. 注册输出（成功时）
+        if (r.isSuccess() && r.getOutput() != null) {
+            dataContractEngine.publishOutput(step, r, runtimeContext);
+        }
+
+        // 2. 检查中断
+        if (r.getCommand() != null) {
+            log.info("触发检查点: stepId={}, command={}", step.getId(), r.getCommand().getType());
+            interruptHandler.suspend(xid, userId, threadId, step.getId(), plan, stepIndex, runtimeContext, r.getCommand());
+            return false; // 停止执行
+        }
+
+        // 3. 失败策略处理
+        if (!r.isSuccess()) {
+            StepDataContract.FailurePolicy policy = dataContractEngine.getFailurePolicy(step);
+            switch (policy) {
+                case ROLLBACK_AND_STOP -> {
+                    log.error("必选步骤失败，触发回滚: stepId={}", step.getId());
+                    interruptHandler.rollback(xid);
+                    return false; // 停止执行
+                }
+                case SKIP_AND_CONTINUE -> {
+                    log.warn("步骤失败但跳过继续: stepId={}", step.getId());
+                }
+                case MARK_AS_FAILED -> {
+                    log.warn("步骤标记为失败: stepId={}", step.getId());
+                }
+            }
+        }
+
+        return true; // 继续执行
+    }
+
+    /**对输入数据进行数据引擎处理，即把{step1.output} 这种占位符号，替换成实际的content内容**/
     private Step getEnrichedStep(Step step, Map<String, Object> runtimeContext) {
         // 使用 DataContractEngine 构建输入
         Map<String, Object> stepInput = dataContractEngine.buildInput(step, runtimeContext);
@@ -159,34 +171,57 @@ public class GraphExecutor {
     }
 
     private List<ExecutionResult> executeParallel(OrchestrationPlan plan,
-                                                  String threadId,
-                                                  String userId,
-                                                  Map<String, String> tokens,
-                                                  String xid,
+                                                  String threadId, String userId,
+                                                  Map<String, String> tokens, String xid,
                                                   MemoryContext memoryCtx,
                                                   Map<String, Object> runtimeContext) {
-        List<Step> steps = plan.getSteps();
-        // 无依赖的步骤并行执行
-        List<Step> parallelSteps = steps.stream()
-                .filter(s -> s.getDependsOn() == null || s.getDependsOn().isEmpty())
-                .collect(Collectors.toList());
+        // 1. 拓扑排序，识别并行组
+        List<List<Step>> parallelGroups = graphBuilder.buildParallelExecutionGroups(plan.getSteps());
+        List<ExecutionResult> allResults = new ArrayList<>();
 
-        List<CompletableFuture<ExecutionResult>> futures = parallelSteps.stream()
-                .map(step -> CompletableFuture.supplyAsync(() ->
-                                executeSingleStep(step, runtimeContext, threadId, userId, tokens, xid, memoryCtx),
-                        parallelExecutor))
-                .collect(Collectors.toList());
+        for (List<Step> group : parallelGroups) {
+            // 2. 处理组内单步骤
+            if (group.size() == 1) {
+                Step step = group.get(0);
+                ExecutionResult r = executeSingleStep(step, runtimeContext, threadId, userId, tokens, xid, memoryCtx);
+                allResults.add(r);
 
-        List<ExecutionResult> results = futures.stream()
-                .map(CompletableFuture::join)
-                .collect(Collectors.toList());
+                //中断检查+失败回滚通用
+                if (!postProcessStepResult(r, step, runtimeContext, plan,
+                        allResults.size() - 1, xid, userId, threadId)) {
+                    return allResults;
+                }
 
-        results.forEach(r -> {
-            if (r.isSuccess()) runtimeContext.put(r.getStepId() + ".output", r.getOutput());
-        });
+            } else {
+                // 3. 并行执行组内步骤
+                List<CompletableFuture<ExecutionResult>> futures = group.stream()
+                        .map(step -> CompletableFuture.supplyAsync(() ->
+                                        executeSingleStep(step, runtimeContext, threadId, userId, tokens, xid, memoryCtx),
+                                parallelExecutor))
+                        .collect(Collectors.toList());
 
-        // 注：这里仅实现了一轮并行，实际生产需循环处理依赖满足的后续步骤，此处从简
-        return results;
+                List<ExecutionResult> groupResults = futures.stream()
+                        .map(CompletableFuture::join)
+                        .collect(Collectors.toList());
+
+                allResults.addAll(groupResults);
+
+                // 统一后处理：先更新上下文，再检查中断和失败
+                for (ExecutionResult r : groupResults) {
+                    Step step = findStepById(plan.getSteps(), r.getStepId());
+                    if (!postProcessStepResult(r, step, runtimeContext, plan,
+                            allResults.size() - 1, xid, userId, threadId)) {
+                        return allResults;
+                    }
+                }
+            }
+        }
+        return allResults;
+    }
+
+    // 辅助方法：根据stepId查找Step
+    private Step findStepById(List<Step> steps, String stepId) {
+        return steps.stream().filter(s -> s.getId().equals(stepId)).findFirst().orElse(null);
     }
 
     private List<ExecutionResult> executeConditional(OrchestrationPlan plan,
@@ -237,21 +272,24 @@ public class GraphExecutor {
                                               Map<String, String> tokens,
                                               String xid,
                                               MemoryContext memoryCtx) {
+        // 1. 先对步骤进行数据契约处理，解析输入占位符、注入 userQuery 等
+        Step enrichedStep = getEnrichedStep(step, runtimeContext);
+
         return switch (step.getType()) {
-            case A2A_DELEGATE -> doA2ADelegateLogic(step, runtimeContext, threadId, tokens, xid, memoryCtx);
+            case A2A_DELEGATE -> doA2ADelegateLogic(enrichedStep, runtimeContext, threadId, tokens, xid, memoryCtx);
             case LLM_CALL -> {
                 try {
-                    yield doLLMCallLogic(step, runtimeContext, memoryCtx);
+                    yield doLLMCallLogic(enrichedStep, runtimeContext, memoryCtx);
                 } catch (Exception e) {
-                    log.error("LLM步骤执行失败: stepId={}", step.getId(), e);
+                    log.error("LLM步骤执行失败: stepId={}", enrichedStep.getId(), e);
                     yield ExecutionResult.builder()
-                            .stepId(step.getId())
+                            .stepId(enrichedStep.getId())
                             .success(false)
                             .error("LLM调用失败: " + e.getMessage())
                             .build();
                 }
             }
-            case INTERRUPT -> doInterruptLogic(step, runtimeContext);
+            case INTERRUPT -> doInterruptLogic(enrichedStep, runtimeContext);
         };
     }
 
@@ -260,23 +298,35 @@ public class GraphExecutor {
     }
 
     private ExecutionResult doInterruptLogic(Step step, Map<String, Object> runtimeContext) {
-        // 1. 收集前序步骤的最新输出（供用户参考）
+        // 1. 根据中断步骤的依赖关系，精确获取需要展示给用户的前序输出
         Map<String, Object> previewOutput = new HashMap<>();
-        if (!runtimeContext.isEmpty()) {
-            // 取最后一个步骤的输出（假设 context 的 key 是 stepId.output 格式）
+
+        if (step.getDependsOn() != null && !step.getDependsOn().isEmpty()) {
+            Map<String, Object> previousOutputs = new LinkedHashMap<>();
+            for (String dependStepId : step.getDependsOn()) {
+                String outputKey = dependStepId + ".output";
+                if (runtimeContext.containsKey(outputKey)) {
+                    previousOutputs.put(dependStepId, runtimeContext.get(outputKey));
+                }
+            }
+            if (!previousOutputs.isEmpty()) {
+                // 如果有多个依赖，使用 previousOutputs；如果只有一个，仍然包装为Map方便前端统一处理
+                previewOutput.put("previousStepOutputs", previousOutputs);
+            }
+        }  else if (!runtimeContext.isEmpty()) {
+            // 如果没有显式依赖（向后兼容），尝试取最后一个已完成的步骤
             String lastOutputKey = runtimeContext.keySet().stream()
                     .filter(k -> k.endsWith(".output"))
-                    .reduce((first, second) -> second) // 取最后一个
+                    .reduce((first, second) -> second)
                     .orElse(null);
             if (lastOutputKey != null) {
                 previewOutput.put("previousStepOutput", runtimeContext.get(lastOutputKey));
             }
         }
 
-        // 2. 构建中断命令
+        // 2. 构建中断命令（保持不变）
         ExecutionResult.Command.CommandBuilder commandBuilder = ExecutionResult.Command.builder();
         if (step.getCheckpoint() != null) {
-            // 使用 CheckpointConfig
             Step.CheckpointConfig cp = step.getCheckpoint();
             String commandType = cp.getType() == Step.CheckpointConfig.CheckpointType.CREDENTIAL
                     ? "REQUEST_CREDENTIAL" : "REQUEST_CONFIRM";
@@ -284,19 +334,18 @@ public class GraphExecutor {
                     .message(cp.getQuestion() != null ? cp.getQuestion() : step.getQuestion())
                     .requiredScopes(cp.getRequiredScopes() != null ? cp.getRequiredScopes() : List.of());
         } else {
-            // 兼容旧版简单中断
             commandBuilder.type("REQUEST_CONFIRM")
                     .message(step.getQuestion())
                     .requiredScopes(List.of());
         }
-        previewOutput.put("question", commandBuilder.build().getMessage()); // 也把问题本身放入输出
+        previewOutput.put("question", commandBuilder.build().getMessage());
 
-        // 3. 返回“等待用户操作”的结果
+        // 3. 返回结果
         return ExecutionResult.builder()
                 .stepId(step.getId())
-                .success(false)          // 步骤未完成，但并非错误
+                .success(false)
                 .command(commandBuilder.build())
-                .output(previewOutput)   // 携带前序输出供前端展示
+                .output(previewOutput)
                 .build();
     }
 

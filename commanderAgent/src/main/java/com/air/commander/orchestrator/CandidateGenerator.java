@@ -35,7 +35,7 @@ public class CandidateGenerator {
      */
     public List<CandidatePlan> generate(String userInput, MemoryContext memoryCtx) {
 
-        // 定义候选任务
+        // 定义候选任务，这里先采用三个不同大模型进行分析
         List<CandidateTask> tasks = List.of(
                 new CandidateTask("A", "fastModelClient"),
                 new CandidateTask("B", "reasoningModelClient"),
@@ -55,11 +55,11 @@ public class CandidateGenerator {
                 )
                 .toList();
 
-        // 等待所有完成（最多60秒）
+        // 等待所有完成（最多180秒）
         return futures.stream()
                 .map(f -> {
                     try {
-                        return f.get(60, TimeUnit.SECONDS);
+                        return f.get(180, TimeUnit.SECONDS);
                     } catch (Exception e) {
                         log.error("等待候选计划超时", e);
                         return null;

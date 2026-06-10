@@ -5,6 +5,8 @@ import com.air.commander.model.Step;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 流程图构建器
@@ -13,18 +15,18 @@ import java.util.*;
 @Component
 public class GraphBuilder {
 
-    public List<Step> buildExecutionOrder(OrchestrationPlan plan) {
-        return topologicalSort(plan.getSteps());
+    public List<Step> buildSequentialExecutionOrder(OrchestrationPlan plan) {
+        return topologicalSequentialSort(plan.getSteps());
+    }
+
+    public List<List<Step>> buildParallelExecutionGroups(List<Step> steps){
+        return topologicalParallelGroups(steps);
     }
 
     /**
-     * 将步骤进行拓扑排序
-     * why:
-     * 步骤顺序不可信：LLM 可能把有依赖关系的步骤随意排列（例如把 step2 放在 step1 前面，但 step2 依赖 step1 的输出）。
-     * 依赖关系存在于字段中：dependsOn 字段才是真正的执行顺序约束，而不是数组索引。
-     * 支持并行识别：拓扑排序后，可以识别出哪些步骤没有依赖关系，从而支持并行执行。
+     * 将步骤进行拓扑排序，输出一维度线性列表--->仅适用于Sequential顺序执行模式
      */
-    private List<Step> topologicalSort(List<Step> steps) {
+    private List<Step> topologicalSequentialSort(List<Step> steps) {
         Map<String, Step> stepMap = new LinkedHashMap<>();
         steps.forEach(s -> stepMap.put(s.getId(), s));
         Map<String, Integer> inDegree = new HashMap<>();
@@ -50,5 +52,53 @@ public class GraphBuilder {
             }
         }
         return sorted;
+    }
+
+
+    /**
+     * 将步骤进行拓扑排序，输出二维维度分层列表-->仅适用于Parallel带有并行的执行模式
+     */
+    private List<List<Step>> topologicalParallelGroups(List<Step> steps) {
+        // 构建映射
+        Map<String, Step> stepMap = steps.stream().collect(Collectors.toMap(Step::getId, Function.identity()));
+        Map<String, Integer> inDegree = new HashMap<>();
+        Map<String, List<String>> dependents = new HashMap<>();
+
+        for (Step step : steps) {
+            inDegree.putIfAbsent(step.getId(), 0);
+            if (step.getDependsOn() != null) {
+                for (String dep : step.getDependsOn()) {
+                    inDegree.merge(step.getId(), 1, Integer::sum);
+                    dependents.computeIfAbsent(dep, k -> new ArrayList<>()).add(step.getId());
+                }
+            }
+        }
+
+        List<List<Step>> groups = new ArrayList<>();
+        Queue<String> queue = new LinkedList<>();
+        // 第一批入度为0的节点
+        for (Map.Entry<String, Integer> entry : inDegree.entrySet()) {
+            if (entry.getValue() == 0) {
+                queue.offer(entry.getKey());
+            }
+        }
+
+        while (!queue.isEmpty()) {
+            List<Step> currentGroup = new ArrayList<>(queue.size());
+            int size = queue.size();
+            for (int i = 0; i < size; i++) {
+                String id = queue.poll();
+                currentGroup.add(stepMap.get(id));
+                // 更新依赖者的入度
+                for (String dependent : dependents.getOrDefault(id, Collections.emptyList())) {
+                    int newDegree = inDegree.merge(dependent, -1, Integer::sum);
+                    if (newDegree == 0) {
+                        queue.offer(dependent);
+                    }
+                }
+            }
+            groups.add(currentGroup);
+        }
+        return groups;
     }
 }

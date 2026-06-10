@@ -342,11 +342,11 @@ public class BaseNacosA2ARouter {
     /**
      * 构建标准的TextParts入参
      */
-    private String buildAgentContent(Step step, Map<String, Object> context) {
+    private String buildAgentContent(Step step, Map<String, Object> runtimeContext) {
         StringBuilder sb = new StringBuilder();
 
         // 1. 解析任务描述中的占位符（如 {step1.output}）
-        String resolvedTask = promptManagerBuilder.replacePlaceholders(step.getTask(), context);
+        String resolvedTask = promptManagerBuilder.replacePlaceholders(step.getTask(), runtimeContext);
         sb.append("【任务】\n").append(resolvedTask).append("\n\n");
 
         // 2. 输入数据（仅当有显式 input 时）
