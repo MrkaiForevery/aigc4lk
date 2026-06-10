@@ -6,7 +6,6 @@ import com.air.commander.interrupt.InterruptHandler;
 import com.air.commander.model.*;
 import com.air.commander.resilience.ResilienceManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -60,24 +59,35 @@ public class GraphExecutor {
                                          Map<String, String> tokens,
                                          String xid,
                                          MemoryContext memoryCtx) {
+        return execute(plan, threadId, userId, tokens, xid, memoryCtx, new ConcurrentHashMap<>());
+    }
+
+    public List<ExecutionResult> execute(OrchestrationPlan plan,
+                                         String threadId,
+                                         String userId,
+                                         Map<String, String> tokens,
+                                         String xid,
+                                         MemoryContext memoryCtx,
+                                         Map<String, Object> runtimeContext) {
         return switch (plan.getExecutionMode()) {
-            case SEQUENTIAL -> executeSequential(plan, threadId, userId, tokens, xid, memoryCtx);
-            case PARALLEL -> executeParallel(plan, threadId, userId, tokens, xid, memoryCtx);
-            case CONDITIONAL -> executeConditional(plan, threadId, userId, tokens, xid, memoryCtx);
-            case ITERATIVE_CORRECTION -> executeIterative(plan, threadId, userId, tokens, xid, memoryCtx);
-            case COMPETITIVE -> executeCompetitive(plan, threadId, userId, tokens, xid, memoryCtx);
-            case PIPELINE -> executePipeline(plan, threadId, userId, tokens, xid, memoryCtx);
+            case SEQUENTIAL -> executeSequential(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
+            case PARALLEL -> executeParallel(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
+            case CONDITIONAL -> executeConditional(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
+            case ITERATIVE_CORRECTION -> executeIterative(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
+            case COMPETITIVE -> executeCompetitive(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
+            case PIPELINE -> executePipeline(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
         };
     }
+
 
     private List<ExecutionResult> executeSequential(OrchestrationPlan plan,
                                                     String threadId,
                                                     String userId,
                                                     Map<String, String> tokens,
                                                     String xid,
-                                                    MemoryContext memoryCtx) {
+                                                    MemoryContext memoryCtx,
+                                                    Map<String, Object> runtimeContext) {
         List<Step> orderedSteps = graphBuilder.buildExecutionOrder(plan);
-        Map<String, Object> runtimeContext = new ConcurrentHashMap<>();
 
         // 注入 userQuery 到全局上下文
         if (memoryCtx != null && memoryCtx.getUserQuery() != null) {
@@ -153,9 +163,9 @@ public class GraphExecutor {
                                                   String userId,
                                                   Map<String, String> tokens,
                                                   String xid,
-                                                  MemoryContext memoryCtx) {
+                                                  MemoryContext memoryCtx,
+                                                  Map<String, Object> runtimeContext) {
         List<Step> steps = plan.getSteps();
-        Map<String, Object> context = new ConcurrentHashMap<>();
         // 无依赖的步骤并行执行
         List<Step> parallelSteps = steps.stream()
                 .filter(s -> s.getDependsOn() == null || s.getDependsOn().isEmpty())
@@ -163,7 +173,7 @@ public class GraphExecutor {
 
         List<CompletableFuture<ExecutionResult>> futures = parallelSteps.stream()
                 .map(step -> CompletableFuture.supplyAsync(() ->
-                                executeSingleStep(step, context, threadId, userId, tokens, xid, memoryCtx),
+                                executeSingleStep(step, runtimeContext, threadId, userId, tokens, xid, memoryCtx),
                         parallelExecutor))
                 .collect(Collectors.toList());
 
@@ -172,7 +182,7 @@ public class GraphExecutor {
                 .collect(Collectors.toList());
 
         results.forEach(r -> {
-            if (r.isSuccess()) context.put(r.getStepId() + ".output", r.getOutput());
+            if (r.isSuccess()) runtimeContext.put(r.getStepId() + ".output", r.getOutput());
         });
 
         // 注：这里仅实现了一轮并行，实际生产需循环处理依赖满足的后续步骤，此处从简
@@ -184,9 +194,10 @@ public class GraphExecutor {
                                                      String userId,
                                                      Map<String, String> tokens,
                                                      String xid,
-                                                     MemoryContext memoryCtx) {
-        // 暂用顺序执行代替，后续可扩展条件分支逻辑
-        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx);
+                                                     MemoryContext memoryCtx,
+                                                     Map<String, Object> runtimeContext) {
+        // todo 暂用顺序执行代替，后续可扩展条件分支逻辑
+        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
     }
 
     private List<ExecutionResult> executeIterative(OrchestrationPlan plan,
@@ -194,9 +205,9 @@ public class GraphExecutor {
                                                    String userId,
                                                    Map<String, String> tokens,
                                                    String xid,
-                                                   MemoryContext memoryCtx) {
-        // 暂用顺序执行代替，后续可扩展循环纠正逻辑
-        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx);
+                                                   MemoryContext memoryCtx, Map<String, Object> runtimeContext) {
+        // todo 暂用顺序执行代替，后续可扩展循环纠正逻辑
+        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
     }
 
     private List<ExecutionResult> executeCompetitive(OrchestrationPlan plan,
@@ -204,9 +215,9 @@ public class GraphExecutor {
                                                      String userId,
                                                      Map<String, String> tokens,
                                                      String xid,
-                                                     MemoryContext memoryCtx) {
-        // 暂用顺序执行代替，后续可扩展竞争选择逻辑
-        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx);
+                                                     MemoryContext memoryCtx, Map<String, Object> runtimeContext) {
+        // todo 暂用顺序执行代替，后续可扩展竞争选择逻辑
+        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
     }
 
     private List<ExecutionResult> executePipeline(OrchestrationPlan plan,
@@ -214,9 +225,9 @@ public class GraphExecutor {
                                                   String userId,
                                                   Map<String, String> tokens,
                                                   String xid,
-                                                  MemoryContext memoryCtx) {
-        // 暂用顺序执行代替，后续可扩展流水线传递逻辑
-        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx);
+                                                  MemoryContext memoryCtx, Map<String, Object> runtimeContext) {
+        // todo 暂用顺序执行代替，后续可扩展流水线传递逻辑
+        return executeSequential(plan, threadId, userId, tokens, xid, memoryCtx,runtimeContext);
     }
 
     private ExecutionResult executeSingleStep(Step step,

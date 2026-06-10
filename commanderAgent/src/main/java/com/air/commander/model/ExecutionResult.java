@@ -1,7 +1,9 @@
 package com.air.commander.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
@@ -11,6 +13,8 @@ import java.util.Map;
  */
 @Data
 @Builder
+@NoArgsConstructor   // ← 添加
+@AllArgsConstructor  // ← 添加
 public class ExecutionResult {
     private String stepId;
     private boolean success;
@@ -19,7 +23,10 @@ public class ExecutionResult {
     private Command command;
     private long durationMs;
 
-    @Data @Builder
+    @Data
+    @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class Command {
         private String type;
         private String scope;

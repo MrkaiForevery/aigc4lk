@@ -1,13 +1,15 @@
 package com.air.commander.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.seata.tm.api.transaction.SuspendedResourcesHolder;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.io.Serializable;
+import java.io.*;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -37,13 +39,11 @@ public class InterruptContext implements Serializable {
     private List<String> requiredScopes;    // 需要用户授予的权限范围
     private Map<String, Object> runtimeContext; // 前序步骤的输出结果 (key: stepId.output)
 
-    // ==================== 分布式事务快照 ====================
-    private SuspendedResourcesHolder transactionHolder;
-
     // ==================== 场景模式 ====================
-    private String mode;  // "template" 或 "dynamic"
+    private ExecutionPlan.ModeType mode;  // "template" 或 "dynamic"
 
     // ==================== 元数据 ====================
     private Instant createdAt;              // 检查点创建时间
     private Instant timeoutAt;              // 超时时间（通常为创建时间 + 30 分钟）
+
 }

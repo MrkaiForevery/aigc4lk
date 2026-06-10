@@ -1,7 +1,10 @@
 package com.air.commander.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.util.List;
 import java.util.Map;
 
@@ -11,6 +14,8 @@ import java.util.Map;
  */
 @Data
 @Builder
+@NoArgsConstructor   // ← 添加
+@AllArgsConstructor  // ← 添加
 public class Step {
 
     private String id;
@@ -65,6 +70,8 @@ public class Step {
 
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class CheckpointConfig {
         private CheckpointType type;            // 检查点类型
         private String question;                // 向用户展示的问题（可覆盖外层 question）

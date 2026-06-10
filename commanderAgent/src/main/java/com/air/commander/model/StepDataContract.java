@@ -1,7 +1,10 @@
 package com.air.commander.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.util.List;
 
 /**
@@ -9,6 +12,8 @@ import java.util.List;
  */
 @Data
 @Builder
+@NoArgsConstructor   // ← 添加
+@AllArgsConstructor  // ← 添加
 public class StepDataContract {
     
     // 输入契约：声明需要从全局上下文中获取哪些数据
@@ -25,6 +30,8 @@ public class StepDataContract {
     
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class InputField {
         private String name;           // 在全局上下文中的 key（如 "step1.output"）
         private String alias;          // 传递给步骤时的别名（如 "carData"）
@@ -35,6 +42,8 @@ public class StepDataContract {
     
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class OutputField {
         private String name;           // 输出在全局上下文中的 key（如 "step2.output"）
         private String description;    // 输出描述

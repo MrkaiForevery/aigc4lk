@@ -10,7 +10,9 @@ import java.util.Map;
  */
 @Component
 public class CredentialService {
+
     public Map<String, String> approve(String userId, List<String> scopes) {
+
         return Map.of("token", "mock-token");
     }
 }

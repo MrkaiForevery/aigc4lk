@@ -5,7 +5,7 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public enum SupportModeNameType {
+public enum SupportChatModeType {
 
     QWEN_TURBO("qwen","qwen-turbo","fastModel","fastModelClient"),
     QWEN_LONG("qwen","qwen-long","reasoningModel","reasoningModelClient"),

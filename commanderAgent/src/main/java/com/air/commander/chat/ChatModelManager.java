@@ -38,7 +38,7 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportModeNameType.QWEN_TURBO.getModelName())
+                        .withModel(SupportChatModeType.QWEN_TURBO.getModelName())
                         .withTemperature(0.5)
                         .build())
                 .build();
@@ -54,7 +54,7 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportModeNameType.QWEN_LONG.getModelName())
+                        .withModel(SupportChatModeType.QWEN_LONG.getModelName())
                         .withTemperature(0.3)
                         .build())
                 .build();
@@ -70,7 +70,7 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportModeNameType.QWEN_PLUS.getModelName())
+                        .withModel(SupportChatModeType.QWEN_PLUS.getModelName())
                         .withTemperature(0.3)
                         .build())
                 .build();

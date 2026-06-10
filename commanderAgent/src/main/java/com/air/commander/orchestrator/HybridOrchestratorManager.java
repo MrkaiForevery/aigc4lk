@@ -12,16 +12,21 @@ import io.seata.core.context.RootContext;
 import io.seata.spring.annotation.GlobalTransactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.seata.core.exception.TransactionException;
+import org.apache.seata.tm.api.GlobalTransactionContext;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
- * 混合编排器
+ * 混合模式编排器
  * 核心编排逻辑句柄类
+ * 模式1: 静态模板匹配方式(template)生成严格的预定义好的执行plan
+ * 模式2: 由LLM机制自由动态的生成复杂的执行plan
  */
 @Slf4j
 @Service
@@ -55,12 +60,14 @@ public class HybridOrchestratorManager {
         IntentResult intent = intentClassifier.classify(userInput, memoryCtx);
 
         // 3. 生成编排计划
-       OrchestrationPlan plan;
+        OrchestrationPlan plan;
         if (intent.isTemplate()) {
             plan = templateExecutor.loadAndPersonalize(intent.templateId(), userInput, memoryCtx);
+            plan.setMode(ExecutionPlan.ModeType.TEMPLATE);
         } else {
             // 使用竞争式多LLM模型回答选择结果
             plan = competitionOrchestratorEngine.generatePlan(userInput, memoryCtx);
+            plan.setMode(ExecutionPlan.ModeType.DYNAMIC);
         }
 
         // 4. 执行计划
@@ -76,7 +83,7 @@ public class HybridOrchestratorManager {
 
         // 6. 构建返回结果
         ExecutionPlan originalExecutedResult = ExecutionPlan.builder()
-                .mode(intent.isTemplate() ? ExecutionPlan.ModeType.TEMPLATE : ExecutionPlan.ModeType.DYNAMIC)
+                .mode(plan.getMode())
                 .planId(plan.getPlanId())
                 .results(results)
                 .interrupted(results.stream().anyMatch(r -> r.getCommand() != null))
@@ -90,50 +97,105 @@ public class HybridOrchestratorManager {
     /**
      * 从中断点恢复执行（检查点恢复）
      */
-    @GlobalTransactional(timeoutMills = 1800000)
-    public ExecutionPlan resumeExecution(String xid, List<String> approvedScopes) {
-        // 1. 读取检查点（注意：需要先读取，因为 resume 会删除）
+    public ExecutionPlan resumeExecution(String xid, Map<String, String> tokens) {
+        //从redis上获取checkPoint信息
+        InterruptContext ctx = loadCheckpoint(xid);
+        //兜底:重复绑定事务id
+        RootContext.bind(xid);
+
+        try {
+            //序列化plan
+            OrchestrationPlan plan = deserializePlan(ctx.getPlanJson());
+            //还原所有的step步骤
+            List<Step> allSteps = graphBuilder.buildExecutionOrder(plan);
+
+            //如果现在的checkPoint是最后一个step，直接返回
+            if (hasNoRemainingSteps(ctx, allSteps)) {
+                commitTransaction(xid);
+                return buildFinalResult(plan, ctx, allSteps, Collections.emptyList(), xid);
+            }
+
+            //继续执行后续步骤
+            List<ExecutionResult> newResults = executeRemainingSteps(plan, ctx, allSteps, tokens, xid);
+
+            //对结果进行判断，是否回滚或者提交事务
+            return buildFinalResult(plan, ctx, allSteps, newResults, xid);
+        } finally {
+            //释放此次currentCheckPoint分布式全局事务锁
+            RootContext.unbind();
+            //释放redis里面currentCheckPoint信息
+            redissonClient.getBucket("interrupt:" + xid).delete();
+        }
+    }
+
+    // 委托和封装方法
+    private InterruptContext loadCheckpoint(String xid) {
         InterruptContext ctx = (InterruptContext) redissonClient.getBucket("interrupt:" + xid).get();
         if (ctx == null) {
             throw new RuntimeException("检查点不存在或已过期: " + xid);
         }
+        return ctx;
+    }
 
-        // 2. 获取用户凭证
-        Map<String, String> tokens = credentialService.approve(ctx.getUserId(), approvedScopes);
-
-        // 3. 恢复全局事务（在 resume 中完成）
-        interruptHandler.resume(xid, approvedScopes); // 内部会恢复事务并删除检查点
-
-        // 4. 反序列化编排计划
-        OrchestrationPlan plan;
+    private OrchestrationPlan deserializePlan(String planJson) {
         try {
-            plan = objectMapper.readValue(ctx.getPlanJson(), OrchestrationPlan.class);
+            return objectMapper.readValue(planJson, OrchestrationPlan.class);
         } catch (Exception e) {
             throw new RuntimeException("无法反序列化编排计划", e);
         }
+    }
 
-        // 5. 构建剩余步骤（跳过已完成的步骤）
-        List<Step> allSteps = graphBuilder.buildExecutionOrder(plan);
+    private boolean hasNoRemainingSteps(InterruptContext ctx, List<Step> allSteps) {
+        return ctx.getStepIndex() + 1 >= allSteps.size();
+    }
+
+    private List<ExecutionResult> executeRemainingSteps(OrchestrationPlan plan, InterruptContext ctx, List<Step> allSteps, Map<String, String> tokens, String xid) {
         List<Step> remainingSteps = allSteps.subList(ctx.getStepIndex() + 1, allSteps.size());
 
-        // 6. 创建仅包含剩余步骤的新计划
         OrchestrationPlan remainingPlan = OrchestrationPlan.builder()
                 .planId(plan.getPlanId())
                 .executionMode(plan.getExecutionMode())
                 .steps(remainingSteps)
                 .build();
 
-        // 7. 重建记忆上下文（可根据需要从 ctx 恢复会话信息）
         MemoryContext memoryCtx = memoryContextBuilder.build(ctx.getUserId(), ctx.getThreadId(), "");
 
-        // 8. 执行剩余步骤
-        List<ExecutionResult> newResults = graphExecutor.execute(
-                remainingPlan, ctx.getThreadId(), ctx.getUserId(),
-                tokens, xid, memoryCtx
+        return graphExecutor.execute(
+                remainingPlan,
+                ctx.getThreadId(),
+                ctx.getUserId(),
+                tokens,
+                xid,
+                memoryCtx,
+                ctx.getRuntimeContext()
         );
+    }
 
-        // 9. 合并前序结果与新结果
-        return buildMergedPlan(plan, ctx, newResults, xid);
+    private ExecutionPlan buildFinalResult(OrchestrationPlan plan, InterruptContext ctx, List<Step> allSteps, List<ExecutionResult> newResults, String xid) {
+        boolean anyFailed = newResults.stream().anyMatch(r -> !r.isSuccess());
+        if (anyFailed) {
+            rollbackTransaction(xid);
+        } else {
+            commitTransaction(xid);
+        }
+        return trimResults(buildMergedPlan(plan, ctx, allSteps, newResults, xid));
+    }
+
+    // Seata 事务操作封装
+    private void commitTransaction(String xid) {
+        try {
+            GlobalTransactionContext.reload(xid).commit();
+        } catch (TransactionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void rollbackTransaction(String xid) {
+        try {
+            GlobalTransactionContext.reload(xid).rollback();
+        } catch (TransactionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -141,41 +203,44 @@ public class HybridOrchestratorManager {
      */
     private ExecutionPlan buildMergedPlan(OrchestrationPlan plan,
                                           InterruptContext ctx,
+                                          List<Step> orderedSteps,
                                           List<ExecutionResult> newResults,
                                           String xid) {
-        List<ExecutionResult> allResults = new ArrayList<>();
-
-        // 1. 从检查点恢复前序步骤的结果（已完成的步骤）
         Map<String, Object> runtimeContext = ctx.getRuntimeContext();
-        for (int i = 0; i <= ctx.getStepIndex(); i++) {
-            Step step = plan.getSteps().get(i);
-            if (step.getId().equals(ctx.getCurrentStepId())) {
-                // 中断步骤本身（返回了 command）
-                allResults.add(ExecutionResult.builder()
-                        .stepId(step.getId())
-                        .success(false)
-                        .command(ExecutionResult.Command.builder()
-                                .type(ctx.getCommandType())
-                                .message(ctx.getQuestion())
-                                .requiredScopes(ctx.getRequiredScopes())
-                                .build())
-                        .build());
-            } else {
-                // 已完成的步骤，输出从 context 中取出
-                Object output = runtimeContext.get(step.getId() + ".output");
-                allResults.add(ExecutionResult.builder()
-                        .stepId(step.getId())
-                        .success(true)
-                        .output(output instanceof Map ? (Map<String, Object>) output : null)
-                        .build());
-            }
-        }
 
-        // 2. 追加新执行的步骤结果
+        // 1. 构建已完成步骤的结果（包括中断步骤）
+        List<ExecutionResult> previousResults = IntStream.rangeClosed(0, ctx.getStepIndex())
+                .mapToObj(i -> {
+                    Step step = orderedSteps.get(i);
+                    if (step.getId().equals(ctx.getCurrentStepId())) {
+                        // 中断步骤本身
+                        return ExecutionResult.builder()
+                                .stepId(step.getId())
+                                .success(false)
+                                .command(ExecutionResult.Command.builder()
+                                        .type(ctx.getCommandType())
+                                        .message(ctx.getQuestion())
+                                        .requiredScopes(ctx.getRequiredScopes())
+                                        .build())
+                                .build();
+                    } else {
+                        // 已完成步骤，从上下文取输出
+                        Object output = runtimeContext.get(step.getId() + ".output");
+                        return ExecutionResult.builder()
+                                .stepId(step.getId())
+                                .success(true)
+                                .output(output instanceof Map ? (Map<String, Object>) output : null)
+                                .build();
+                    }
+                })
+                .collect(Collectors.toList());
+
+        // 2. 合并所有结果
+        List<ExecutionResult> allResults = new ArrayList<>(previousResults);
         allResults.addAll(newResults);
 
         return ExecutionPlan.builder()
-                .mode(ExecutionPlan.ModeType.valueOf(ctx.getMode()))
+                .mode(ctx.getMode())
                 .planId(plan.getPlanId())
                 .results(allResults)
                 .interrupted(false)

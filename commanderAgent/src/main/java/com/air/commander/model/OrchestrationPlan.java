@@ -1,15 +1,22 @@
 package com.air.commander.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Data
 @Builder
+@NoArgsConstructor  // 添加这一行
+@AllArgsConstructor // 可选，保持Builder可用
 public class OrchestrationPlan {
     //编排计划的唯一标识，用于日志追踪、案例入库、崩溃恢复时重新加载计划。
     private String planId;
+
+    //意图识别走的模式 是 "template" 或 "dynamic"
+    private ExecutionPlan.ModeType mode;
 
     //定义整个计划的执行策略（顺序、并行、条件分支等）。GraphExecutor 根据它选择不同的执行器。
     private ExecutionMode executionMode;
@@ -35,6 +42,8 @@ public class OrchestrationPlan {
 
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class CorrectionConfig {
         private int maxIterations;
         private int qualityThreshold;
@@ -44,6 +53,8 @@ public class OrchestrationPlan {
 
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class CompetitiveConfig {
         private List<String> competitors;
         private String selectionCriteria;
@@ -51,6 +62,8 @@ public class OrchestrationPlan {
 
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class OnReject {
         private String action;  // rollback / skip / ask_user
     }
@@ -58,6 +71,8 @@ public class OrchestrationPlan {
     // 新增：回滚配置
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class RollbackConfig {
         private boolean enabled;      // 是否启用回滚
         private String savepoint;     // 回滚起始步骤 ID（为空则从第一步开始回滚）

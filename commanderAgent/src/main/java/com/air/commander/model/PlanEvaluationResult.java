@@ -1,7 +1,10 @@
 package com.air.commander.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.util.Map;
 
 /**
@@ -9,6 +12,8 @@ import java.util.Map;
  */
 @Data
 @Builder
+@NoArgsConstructor   // ← 添加
+@AllArgsConstructor  // ← 添加
 public class PlanEvaluationResult {
     private String winner;                              // 胜出候选 (A/B/C)
     private Map<String, DimensionScores> scores;        // 各候选的各维度评分
@@ -16,6 +21,8 @@ public class PlanEvaluationResult {
 
     @Data
     @Builder
+    @NoArgsConstructor   // ← 添加
+    @AllArgsConstructor  // ← 添加
     public static class DimensionScores {
         private int agentAccuracy;              // Agent选择正确性 (1-10)
         private int dataFlow;         // 步骤逻辑合理性 (1-10)

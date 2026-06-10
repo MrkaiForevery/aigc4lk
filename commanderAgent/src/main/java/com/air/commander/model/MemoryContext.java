@@ -13,6 +13,8 @@ import java.util.Map;
  */
 @Data
 @Builder
+@NoArgsConstructor   // ← 添加
+@AllArgsConstructor  // ← 添加
 public class MemoryContext {
     // 新增：当前用户请求的原始文本
     private String userQuery;
