@@ -9,6 +9,9 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.List;
 
+/**
+ * 会话管理器
+ */
 @Component
 @RequiredArgsConstructor
 public class ConversationManager {

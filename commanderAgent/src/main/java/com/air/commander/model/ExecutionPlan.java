@@ -13,8 +13,8 @@ import java.util.Map;
  */
 @Data
 @Builder
-@NoArgsConstructor   // ← 添加
-@AllArgsConstructor  // ← 添加
+@NoArgsConstructor
+@AllArgsConstructor
 public class ExecutionPlan {
 
     /**生成执行plan采用的方式:template(采用预定义的模板进行匹配，对应严格场景)/dynamic(使用LLM分析生成-对应非严格场景)**/

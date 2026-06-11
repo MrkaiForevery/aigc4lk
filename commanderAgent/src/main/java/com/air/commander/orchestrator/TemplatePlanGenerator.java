@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  */
 @Component
 @RequiredArgsConstructor
-public class TemplateExecutor {
+public class TemplatePlanGenerator {
 
     private final RemoteConfigLoader configLoader;
 

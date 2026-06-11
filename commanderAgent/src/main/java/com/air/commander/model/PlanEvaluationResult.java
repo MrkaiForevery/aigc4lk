@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * 候选计划评估结果（阶段3输出）
+ * 竞争模式生成的候选计划评估结果实体（评估阶段输出）
  */
 @Data
 @Builder

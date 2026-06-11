@@ -1,8 +1,7 @@
 package com.air.commander.orchestrator;
 
-import com.air.commander.credential.CredentialService;
+import com.air.commander.graph.GraphExecutorEngine;
 import com.air.commander.intent.IntentClassifier;
-import com.air.commander.interrupt.InterruptHandler;
 import com.air.commander.memory.MemoryContextBuilder;
 import com.air.commander.memory.MemoryUpdatePipeline;
 import com.air.commander.model.*;
@@ -34,9 +33,9 @@ public class HybridOrchestratorManager {
 
     private final MemoryContextBuilder memoryContextBuilder;
     private final IntentClassifier intentClassifier;
-    private final TemplateExecutor templateExecutor;
+    private final TemplatePlanGenerator templatePlanGenerator;
     private final CompetitionOrchestratorEngine competitionOrchestratorEngine;
-    private final GraphExecutor graphExecutor;
+    private final GraphExecutorEngine graphExecutorEngine;
     private final MemoryUpdatePipeline memoryUpdatePipeline;
     private final QualityAssessor qualityAssessor;
     private final RedissonClient redissonClient;
@@ -58,7 +57,7 @@ public class HybridOrchestratorManager {
         // 3. 生成编排计划
         OrchestrationPlan plan;
         if (intent.isTemplate()) {
-            plan = templateExecutor.loadAndPersonalize(intent.templateId(), userInput, memoryCtx);
+            plan = templatePlanGenerator.loadAndPersonalize(intent.templateId(), userInput, memoryCtx);
             plan.setMode(ExecutionPlan.ModeType.TEMPLATE);
         } else {
             // 使用竞争式多LLM模型回答选择结果
@@ -68,7 +67,7 @@ public class HybridOrchestratorManager {
 
         // 4. 执行编排好的计划
         String xid = RootContext.getXID();
-        List<ExecutionResult> results = graphExecutor.execute(plan, threadId, userId, tokens, xid, memoryCtx);
+        List<ExecutionResult> results = graphExecutorEngine.execute(plan, threadId, userId, tokens, xid, memoryCtx);
 
         // 5. 异步质量评估与记忆更新
         final OrchestrationPlan finalPlan = plan;
@@ -118,7 +117,7 @@ public class HybridOrchestratorManager {
                     .build();
 
             MemoryContext memoryCtx = memoryContextBuilder.build(ctx.getUserId(), ctx.getThreadId(), "");
-            List<ExecutionResult> newResults = graphExecutor.execute(
+            List<ExecutionResult> newResults = graphExecutorEngine.execute(
                     remainingPlan,
                     ctx.getThreadId(),
                     ctx.getUserId(),

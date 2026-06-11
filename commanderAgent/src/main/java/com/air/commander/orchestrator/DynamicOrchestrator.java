@@ -51,7 +51,7 @@ public class DynamicOrchestrator {
     }
 
     /**
-     * 调用复杂大模型生成任务得执行计划，且带有生成计划结果的校验逻辑，如果校验失败则需要重新生成执行计划，最多校验2次
+     * 调用复杂大模型生成任务的执行计划，且带有生成计划结果的校验逻辑，如果校验失败则需要重新生成执行计划，最多校验2次
      */
     public OrchestrationPlan generatePlan(String userInput, MemoryContext memoryCtx, String choseChatClientBeanName) {
         // 1. 构建完整的 Prompt

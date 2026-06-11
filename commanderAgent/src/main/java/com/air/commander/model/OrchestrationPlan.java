@@ -7,10 +7,13 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
+/**
+ * 生成的执行计划实体
+ */
 @Data
 @Builder
-@NoArgsConstructor  // 添加这一行
-@AllArgsConstructor // 可选，保持Builder可用
+@NoArgsConstructor
+@AllArgsConstructor
 public class OrchestrationPlan {
     //编排计划的唯一标识，用于日志追踪、案例入库、崩溃恢复时重新加载计划。
     private String planId;
@@ -24,7 +27,7 @@ public class OrchestrationPlan {
     //任务的原子步骤列表。每个步骤包含类型（A2A/LLM/中断）、依赖关系、输入输出等。这是编排的最小执行单元。
     private List<Step> steps;
 
-    //循环纠正模式的参数：最大迭代次数、质量阈值、评估者/纠正者Agent。当 executionMode = ITERATIVE_CORRECTION 时必填。
+    //多循环校验纠正模式的参数。当 executionMode = ITERATIVE_CORRECTION 时必填。
     private CorrectionConfig correctionConfig;
 
     //竞争执行模式的参数：多个Agent竞争执行同一任务，选择最优结果。当 executionMode = COMPETITIVE 时使用。
@@ -37,18 +40,31 @@ public class OrchestrationPlan {
     private RollbackConfig rollback;   // 新增：回滚配置
 
     public enum ExecutionMode {
-        SEQUENTIAL, PARALLEL, CONDITIONAL, ITERATIVE_CORRECTION, COMPETITIVE, PIPELINE
+        SEQUENTIAL, PARALLEL, CONDITIONAL, ITERATIVE_CORRECTION, COMPETITIVE
     }
 
     @Data
     @Builder
-    @NoArgsConstructor   // ← 添加
-    @AllArgsConstructor  // ← 添加
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CorrectionConfig {
-        private int maxIterations;
-        private int qualityThreshold;
-        private String evaluatorAgent;
-        private String correctorAgent;
+        // 支持多个循环
+        private List<CorrectionLoop> loops;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CorrectionLoop {
+        private String loopId;              // 循环的唯一标识
+        private String firstStepId;         // 循环的起始步骤 ID
+        private String evaluatorStepId;     // 评估步骤 ID（循环结束标志）
+        private String correctorStepId;     // 修正步骤 ID（可选）
+        private int maxIterations;          // 最大迭代次数
+        private int qualityThreshold;       // 质量阈值
+        private boolean checkpointAfterEachIteration; // 每轮循环后是否插入确认检查点
+        private boolean checkpointOnMaxIterations;  // 达到最大迭代次数后是否插入检查点
     }
 
     @Data

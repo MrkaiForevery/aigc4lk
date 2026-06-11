@@ -334,6 +334,14 @@ public class PromptManagerBuilder {
         sb.append("5. 所有分支步骤（例如 step_fix, step_summary 等）的 dependsOn 必须包含条件步骤的 ID。\n");
         sb.append("6. 步骤列表中只应包含条件步骤之后可能被执行到的分支步骤，不应出现永远不会被引用的步骤。\n\n");
 
+        // ========= 循环纠正 (ITERATIVE_CORRECTION) 规则 =========
+        sb.append("【循环纠正 (ITERATIVE_CORRECTION) 规则】\n");
+        sb.append("当 executionMode 为 ITERATIVE_CORRECTION 时，必须遵循以下规则：\n");
+        sb.append("1. 计划中必须包含一个评估步骤（LLM_CALL），其 task 要求输出一个 0-100 的评分（JSON 格式）。\n");
+        sb.append("2. 评估步骤之前的步骤是主步骤序列，它们会被循环执行和修正。\n");
+        sb.append("3. 评估步骤之后可以有一个修正步骤（LLM_CALL 或 A2A_DELEGATE），用于根据评估反馈改进主步骤的输出。\n");
+        sb.append("4. 在 correctionConfig 中指定 evaluatorStepId 和 correctorStepId（可选）。\n");
+        sb.append("5. 如果需要每轮循环后用户确认，请插入 INTERRUPT 步骤，并将 checkpointAfterEachIteration 设为 true。\n\n");
 
         // ========= 检查点规则（新增，融合到原有逻辑中） =========
         sb.append("【检查点（人工干预）规则】\n");

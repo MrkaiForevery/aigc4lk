@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 阶段3：计划评估与择优
+ * 计划评估与择优
  * 
  * 职责：对多个候选计划进行多维度评估，选出最优计划
  * 模型：qwen-max（评判者）

@@ -15,6 +15,9 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * 意图识别核心类
+ */
 @Slf4j
 @Component
 public class IntentClassifier {

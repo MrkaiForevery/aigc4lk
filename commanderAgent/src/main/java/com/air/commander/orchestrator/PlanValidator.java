@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 
 /**
  * 计划校验器
- * 对LLM生成的执行计划结果进行校验
+ * 对LLM生成的执行计划结果进行简单校验
  */
 @Component
 public class PlanValidator {

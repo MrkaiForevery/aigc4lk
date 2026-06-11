@@ -1,7 +1,5 @@
 package com.air.commander.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import io.seata.tm.api.transaction.SuspendedResourcesHolder;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -9,12 +7,11 @@ import lombok.NoArgsConstructor;
 
 import java.io.*;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
 /**
- * check-point机制下断点记录实体类
+ * check-point机制下断点记录上下文实体类
  */
 @Data
 @Builder
