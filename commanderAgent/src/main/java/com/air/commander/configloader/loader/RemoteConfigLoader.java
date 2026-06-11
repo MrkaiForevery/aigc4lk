@@ -68,7 +68,7 @@ public class RemoteConfigLoader {
     }
 
     /**
-     * 意图规则列表
+     * 模板模式-意图规则列表配置
      */
     public List<IntentRule> getIntentRules() {
         return intentProperties.getRules().stream()

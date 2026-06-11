@@ -26,6 +26,7 @@ public class PlanEvaluationResult {
     public static class DimensionScores {
         private int agentAccuracy;              // Agent选择正确性 (1-10)
         private int dataFlow;         // 步骤逻辑合理性 (1-10)
+        private int executionMode;    // 执行模式选择合理性
         private int checkpoint;  // 检查点恰当性 (1-10)
         private int efficiency;                 // 执行效率 (1-10)
     }

@@ -62,6 +62,10 @@ public class Step {
      /**回滚保存点标识（用于模板中指定回滚起始位置）**/
     private String rollbackSavepoint;
 
+    // ========== 条件执行模式（新增） ==========
+    /**条件执行模式的条件判断参数配置**/
+    private ConditionConfig conditionConfig;
+
     /** 数据契约，定义输入输出规范**/
     private StepDataContract dataContract;
 
@@ -70,8 +74,8 @@ public class Step {
 
     @Data
     @Builder
-    @NoArgsConstructor   // ← 添加
-    @AllArgsConstructor  // ← 添加
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CheckpointConfig {
         private CheckpointType type;            // 检查点类型
         private String question;                // 向用户展示的问题（可覆盖外层 question）
@@ -84,6 +88,20 @@ public class Step {
             CREDENTIAL,  // 授权检查点：需要用户授予权限
             CONFIRM      // 确认检查点：需要用户确认中间结果
         }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ConditionConfig {
+        private String expression;           // SPEL 表达式或自然语言描述
+        private String evaluationMethod;     // "SPEL" | "LLM_JUDGE"
+
+        // 多路分支：key=条件值，value=跳转的步骤ID
+        private Map<String, String> branches;  // 如 {"下滑": "step_fix", "平稳": "step_summary", "增长": "step_expand"}
+
+        private String defaultStepId;         // 默认分支（如果所有条件都不匹配）
     }
 
     public enum StepType {

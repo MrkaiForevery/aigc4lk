@@ -74,11 +74,11 @@ public class PromptManagerBuilder {
         sb.append("- 4：需要多步分析、调用外部服务或涉及敏感数据\n");
         sb.append("- 5：高度复杂，需要多个Agent协作或人工干预\n\n");
 
-        // 风险提示（辅助判断）
-        sb.append("【高风险信号】（如果出现以下情况，complexity至少为4，且可能需要检查点）\n");
-        sb.append("- 涉及财务、医疗、隐私等敏感数据\n");
-        sb.append("- 需要发送邮件、扣款、发布内容等不可逆操作\n");
-        sb.append("- 用户明确要求“确认”或“审核”\n\n");
+//        // 风险提示（辅助判断）
+//        sb.append("【高风险信号】（如果出现以下情况，complexity至少为4，且可能需要检查点）\n");
+//        sb.append("- 涉及财务、医疗、隐私等敏感数据\n");
+//        sb.append("- 需要发送邮件、扣款、发布内容等不可逆操作\n");
+//        sb.append("- 用户明确要求“确认”或“审核”\n\n");
 
         // 输出格式
         sb.append("请以 JSON 格式返回（不要包含其他内容）：\n");
@@ -295,10 +295,11 @@ public class PromptManagerBuilder {
         // ========= 执行模式详细定义 =========
         sb.append("【执行模式定义】\n");
         sb.append("- SEQUENTIAL: 步骤必须按顺序依次执行。如果任务有明确的先后依赖（例如“先分析数据再生成报告”），选择此模式。\n");
-        sb.append("- PARALLEL: 多个子任务互不依赖，可以同时执行以节省时间。\n");
-        sb.append("- CONDITIONAL: 执行路径取决于中间结果，例如“如果分析结果异常，则执行A步骤，否则执行B步骤”。\n");
-        sb.append("- ITERATIVE_CORRECTION: 需要反复执行“执行→评估→修正”循环，直到满足某个质量标准（如生成一份完美的文档）。\n");
-        sb.append("- COMPETITIVE: 让多个 Agent 同时执行同一个任务，然后选择最优结果（适合高难度或需要备选方案的任务）。\n");
+        sb.append("- PARALLEL: 多个子任务互不依赖，可以同时执行以节省时间。如果任务包含多个独立的子任务（例如同时搜集产品信息、用户评价、价格数据），应优先使用此模式。\n");
+        sb.append("- CONDITIONAL: 执行路径取决于中间结果。当任务需要根据某个分析结果动态选择后续步骤时使用。\n");
+        sb.append("  例如：“如果销售下滑则生成应对方案，否则生成总结报告”。此时需要插入一个条件判断步骤（LLM_CALL），其输出决定后续跳转。\n");
+        sb.append("- ITERATIVE_CORRECTION: 需要反复执行“执行→评估→修正”循环，直到满足某个质量标准。\n");
+        sb.append("- COMPETITIVE: 让多个 Agent 同时执行同一个任务，然后选择最优结果。\n");
         sb.append("- PIPELINE: 前一个步骤的输出直接作为后一个步骤的输入，形成流式处理线。\n\n");
 
         // ========= 任务拆分原则 =========
@@ -317,6 +318,22 @@ public class PromptManagerBuilder {
         sb.append("8. 必须确保每个步骤的 task 与其 input 中的数据相匹配，不要描述与 input 内容重复或冲突的动作。\n");
         sb.append("9. 如果某个 LLM_CALL 步骤需要结合用户之前的对话历史才能准确执行（例如“根据刚才讨论的内容进行总结”或“参考之前的对话回答”），\n");
         sb.append("   请在 input 中设置 \"includeChatHistory\": true，否则不要包含此字段或设置为 false。\n\n");
+
+
+        // ========= 条件分支 (CONDITIONAL) 规则 =========
+        sb.append("【条件分支 (CONDITIONAL) 规则】\n");
+        sb.append("当 executionMode 为 CONDITIONAL 时，必须遵循以下规则：\n");
+        sb.append("1. 条件判断步骤必须是 LLM_CALL 类型。\n");
+        sb.append("2. 条件步骤的 task 必须明确要求输出一个简短的分类标签（如“只输出一个词：下滑/平稳/增长”），该标签将作为选择分支的依据。\n");
+        sb.append("3. 条件步骤需包含 conditionConfig 对象，用于声明条件逻辑：\n");
+        sb.append("   - expression: 条件描述，例如“判断销售趋势”或 SPEL 表达式。\n");
+        sb.append("   - evaluationMethod: 评估方式，\"LLM_JUDGE\"（由大模型输出分类标签）或 \"SPEL\"（表达式求值）。当前系统主要使用 \"LLM_JUDGE\"。\n");
+        sb.append("   - branches: 对象，key 为可能的分类标签（如“下滑”），value 为对应要跳转的目标步骤 ID。\n");
+        sb.append("   - defaultStepId: 默认分支的步骤 ID，当大模型输出无法匹配 branches 中的任何标签时使用。\n");
+        sb.append("4. 同时，条件步骤的 input 字段中必须包含 branches 和 default，其内容与 conditionConfig 中的 branches、defaultStepId 保持一致。执行引擎实际路由时依赖 input 中的这些字段。\n");
+        sb.append("5. 所有分支步骤（例如 step_fix, step_summary 等）的 dependsOn 必须包含条件步骤的 ID。\n");
+        sb.append("6. 步骤列表中只应包含条件步骤之后可能被执行到的分支步骤，不应出现永远不会被引用的步骤。\n\n");
+
 
         // ========= 检查点规则（新增，融合到原有逻辑中） =========
         sb.append("【检查点（人工干预）规则】\n");
@@ -405,11 +422,17 @@ public class PromptManagerBuilder {
         sb.append("        - question: 向用户展示的问题\n");
         sb.append("        - requiredScopes: 字符串数组（CREDENTIAL 类型必填）\n");
         sb.append("        - timeoutMinutes: 超时分钟数，默认 30\n\n");
+        sb.append("    - conditionConfig: 当步骤为条件判断步骤时使用（通常与 type: LLM_CALL 配合），包含以下子字段：\n");
+        sb.append("        - expression: 条件描述，如“判断销售趋势”\n");
+        sb.append("        - evaluationMethod: \"LLM_JUDGE\" 或 \"SPEL\"\n");
+        sb.append("        - branches: 对象，key 为分类标签，value 为目标步骤 ID\n");
+        sb.append("        - defaultStepId: 默认分支的步骤 ID\n");
+        sb.append("      注意：即使提供了 conditionConfig，也必须在 input 中包含 branches 和 default 字段。\n");
         sb.append("    - includeChatHistory: 布尔值，仅当 type 为 LLM_CALL 且需要对话历史时才设置为 true，否则可省略或设为 false。\n\n");
 
-        // ========= 正确示例（增强版，包含检查点） =========
-        sb.append("【正确示例1：无检查点的简单任务】\n");
-        sb.append("用户请求：\"介绍一下最新的AI技术\"\n");
+        // ========= 正确示例（覆盖三种执行模式） =========
+        sb.append("【正确示例1：顺序执行（SEQUENTIAL）】\n");
+        sb.append("用户请求：\"帮我分析销售数据并生成报告\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
         sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
@@ -417,56 +440,119 @@ public class PromptManagerBuilder {
         sb.append("    {\n");
         sb.append("      \"id\": \"step1\",\n");
         sb.append("      \"type\": \"LLM_CALL\",\n");
-        sb.append("      \"task\": \"检索并介绍当前最新的AI技术趋势\",\n");
-        sb.append("      \"input\": {\"userQuery\": \"介绍一下最新的AI技术\"},\n");
-        sb.append("      \"includeChatHistory\": false,\n");
+        sb.append("      \"task\": \"对销售数据进行多维分析，输出趋势图和关键指标\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"帮我分析销售数据并生成报告\"},\n");
         sb.append("      \"dependsOn\": []\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step2\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"根据分析结果撰写一份专业的销售报告\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"帮我分析销售数据并生成报告\", \"analysisData\": \"{step1.output}\"},\n");
+        sb.append("      \"dependsOn\": [\"step1\"]\n");
         sb.append("    }\n");
         sb.append("  ]\n");
         sb.append("}\n\n");
 
-        sb.append("【正确示例1：无检查点的简单任务】\n");
-        sb.append("用户请求：\"介绍一下最新的AI技术\"\n");
+        sb.append("【正确示例2：并行执行（PARALLEL）】\n");
+        sb.append("用户请求：\"同时搜集汽车信息、用户评价和保险政策\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
-        sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
+        sb.append("  \"executionMode\": \"PARALLEL\",\n");
         sb.append("  \"steps\": [\n");
         sb.append("    {\n");
         sb.append("      \"id\": \"step1\",\n");
         sb.append("      \"type\": \"LLM_CALL\",\n");
-        sb.append("      \"task\": \"检索并介绍当前最新的AI技术趋势\",\n");
-        sb.append("      \"input\": {\"userQuery\": \"介绍一下最新的AI技术\"},\n");
-        sb.append("      \"includeChatHistory\": false,\n");
+        sb.append("      \"task\": \"从网络上搜集最新的电动汽车信息\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"同时搜集汽车信息、用户评价和保险政策\"},\n");
         sb.append("      \"dependsOn\": []\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step2\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"从汽车之家等平台搜集用户对主流电动车的口碑评价\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"同时搜集汽车信息、用户评价和保险政策\"},\n");
+        sb.append("      \"dependsOn\": []\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step3\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"搜集主流电动汽车的保险政策信息\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"同时搜集汽车信息、用户评价和保险政策\"},\n");
+        sb.append("      \"dependsOn\": []\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step4\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"将汽车信息、口碑评价和保险政策进行汇总分析，生成综合报告\",\n");
+        sb.append("      \"input\": {\"carInfo\": \"{step1.output}\", \"reviews\": \"{step2.output}\", \"insurance\": \"{step3.output}\", \"userQuery\": \"同时搜集汽车信息、用户评价和保险政策\"},\n");
+        sb.append("      \"dependsOn\": [\"step1\", \"step2\", \"step3\"]\n");
         sb.append("    }\n");
         sb.append("  ]\n");
         sb.append("}\n\n");
 
-        sb.append("【正确示例2：需要对话历史的 LLM 步骤】\n");
-        sb.append("用户请求：\"根据我们刚才讨论的内容，总结一下推荐的车型\"\n");
+        sb.append("【正确示例3：条件分支（CONDITIONAL）】\n");
+        sb.append("用户请求：\"分析销售数据，如果下滑就生成应对方案，否则生成总结报告\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
-        sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
+        sb.append("  \"executionMode\": \"CONDITIONAL\",\n");
         sb.append("  \"steps\": [\n");
         sb.append("    {\n");
         sb.append("      \"id\": \"step1\",\n");
         sb.append("      \"type\": \"LLM_CALL\",\n");
-        sb.append("      \"task\": \"根据对话历史中讨论的车型推荐，总结出最终的推荐列表\",\n");
-        sb.append("      \"input\": {\"userQuery\": \"根据我们刚才讨论的内容，总结一下推荐的车型\"},\n");
-        sb.append("      \"includeChatHistory\": true,\n");
+        sb.append("      \"task\": \"分析最近的销售数据，判断整体趋势\",\n");
+        sb.append("      \"input\": {\"userQuery\": \"分析销售数据，如果下滑就生成应对方案，否则生成总结报告\"},\n");
         sb.append("      \"dependsOn\": []\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step_condition\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"根据分析结果判断趋势，只输出一个词：下滑、平稳或增长\",\n");
+        sb.append("      \"input\": {\n");
+        sb.append("        \"analysisData\": \"{step1.output}\",\n");
+        sb.append("        \"branches\": {\"下滑\": \"step_fix\", \"平稳\": \"step_summary\", \"增长\": \"step_expand\"},\n");
+        sb.append("        \"default\": \"step_summary\"\n");
+        sb.append("      },\n");
+        sb.append("      \"conditionConfig\": {\n");
+        sb.append("        \"expression\": \"判断销售趋势\",\n");
+        sb.append("        \"evaluationMethod\": \"LLM_JUDGE\",\n");
+        sb.append("        \"branches\": {\"下滑\": \"step_fix\", \"平稳\": \"step_summary\", \"增长\": \"step_expand\"},\n");
+        sb.append("        \"defaultStepId\": \"step_summary\"\n");
+        sb.append("      },\n");
+        sb.append("      \"dependsOn\": [\"step1\"]\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step_fix\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"根据下滑趋势生成详细应对方案\",\n");
+        sb.append("      \"input\": {\"analysisData\": \"{step1.output}\", \"userQuery\": \"分析销售数据，如果下滑就生成应对方案，否则生成总结报告\"},\n");
+        sb.append("      \"dependsOn\": [\"step_condition\"]\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step_summary\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"根据平稳或增长趋势生成总结报告\",\n");
+        sb.append("      \"input\": {\"analysisData\": \"{step1.output}\", \"userQuery\": \"分析销售数据，如果下滑就生成应对方案，否则生成总结报告\"},\n");
+        sb.append("      \"dependsOn\": [\"step_condition\"]\n");
+        sb.append("    },\n");
+        sb.append("    {\n");
+        sb.append("      \"id\": \"step_expand\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
+        sb.append("      \"task\": \"根据增长趋势生成扩张建议报告\",\n");
+        sb.append("      \"input\": {\"analysisData\": \"{step1.output}\", \"userQuery\": \"分析销售数据，如果下滑就生成应对方案，否则生成总结报告\"},\n");
+        sb.append("      \"dependsOn\": [\"step_condition\"]\n");
         sb.append("    }\n");
         sb.append("  ]\n");
         sb.append("}\n\n");
 
-        sb.append("【正确示例3：包含检查点的敏感任务】\n");
+        sb.append("【正确示例4：包含检查点的敏感任务】\n");
         sb.append("用户请求：\"帮我分析财务数据并发送报告给老板\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
         sb.append("  \"executionMode\": \"SEQUENTIAL\",\n");
         sb.append("  \"steps\": [\n");
         sb.append("    {\n");
-        sb.append("      \"id\": \"step1\",\n");
+        sb.append("      \"id\": \"step_auth\",\n");
         sb.append("      \"type\": \"INTERRUPT\",\n");
         sb.append("      \"task\": \"请求用户授权访问财务数据\",\n");
         sb.append("      \"checkpoint\": {\n");
@@ -480,11 +566,10 @@ public class PromptManagerBuilder {
         sb.append("    },\n");
         sb.append("    {\n");
         sb.append("      \"id\": \"step2\",\n");
-        sb.append("      \"type\": \"A2A_DELEGATE\",\n");
-        sb.append("      \"agent\": \"data-analysis-agent\",\n");
+        sb.append("      \"type\": \"LLM_CALL\",\n");
         sb.append("      \"task\": \"提取并分析最近一个季度的财务数据，输出趋势图和关键指标\",\n");
-        sb.append("      \"input\": {\"userQuery\": \"帮我分析财务数据并发送报告给老板\", \"dataRange\": \"last_quarter\"},\n");
-        sb.append("      \"dependsOn\": [\"step1\"]\n");
+        sb.append("      \"input\": {\"userQuery\": \"帮我分析财务数据并发送报告给老板\"},\n");
+        sb.append("      \"dependsOn\": [\"step_auth\"]\n");
         sb.append("    },\n");
         sb.append("    {\n");
         sb.append("      \"id\": \"step3\",\n");
@@ -545,13 +630,29 @@ public class PromptManagerBuilder {
 
         // ========= 评估标准（强化常见错误警示） =========
         sb.append("【评估标准】\n");
+
         sb.append("1. Agent 准确性 (agentAccuracy)：Agent 的使用是否与可用 Agent 的能力严格匹配？\n");
         sb.append("   - ⚠️ document-agent 只能用于文档生成、报告撰写，绝对不可用于网络搜索、数据收集。\n");
         sb.append("   - 若某候选误将搜索任务分配给 document-agent，该维度应评为 1-3 分，且该候选不应成为 winner。\n");
+
         sb.append("2. 数据流完整性 (dataFlow)：每个步骤的 input 是否包含了完成任务所需的数据？\n");
-        sb.append("   - 依赖前序步骤的步骤，input 中必须使用 {stepX.output} 引用前序输出。\n");
-        sb.append("3. 检查点合理性 (checkpoint)：高风险步骤或不可逆操作前是否合理插入了 INTERRUPT 检查点？\n");
-        sb.append("4. 步骤效率 (efficiency)：步骤数量是否适中（3~5 步为佳）？是否存在可以合并的冗余步骤？\n\n");
+        sb.append("   - 依赖前序步骤的步骤，input 中必须使用 {stepX.output} 引用前序输出，不能为空。\n");
+        sb.append("   - 在条件分支中，不同分支的步骤应正确引用条件步骤或更早步骤的输出。\n");
+        sb.append("   - 在并行执行中，并行步骤之间不能有隐式数据依赖（必须通过 dependsOn 显式声明）。\n\n");
+
+        sb.append("3. 执行模式与结构 (executionMode)：执行模式选择是否合理？步骤结构是否清晰？\n");
+        sb.append("   - 若任务包含多个互不依赖的子任务，应使用 PARALLEL 模式；若强行使用 SEQUENTIAL，扣分。\n");
+        sb.append("   - 若任务需要根据中间结果动态选择后续路径，必须使用 CONDITIONAL 模式，且条件步骤 (LLM_CALL) 的 task 必须明确要求输出分类标签（如“只输出一个词：下滑/平稳/增长”）。\n");
+        sb.append("   - 条件步骤的 input 中必须包含 branches 映射表（key=标签, value=目标步骤ID）和 default 默认分支。\n");
+
+        sb.append("4. 检查点合理性 (checkpoint)：高风险步骤或不可逆操作前是否合理插入了 INTERRUPT 检查点？\n");
+        sb.append("   - 涉及敏感数据访问、发送邮件、扣款、发布内容等操作前，应有 CREDENTIAL 或 CONFIRM 检查点。\n");
+        sb.append("   - 在 CONDITIONAL 模式中，如果某个分支包含高风险操作，检查点应只在该分支内出现，不影响其他分支。\n\n");
+
+
+        sb.append("5. 步骤效率 (efficiency)：是否存在可以合并的冗余步骤？\n");
+        sb.append("   - 多个连续的 LLM_CALL 步骤如果处理同一批数据，应考虑合并为一个步骤。\n");
+        sb.append("   - 条件分支中，不同分支如果包含重复的步骤，应提取到条件判断之前或之后。\n\n");
 
         // ========= 候选计划展示（精简序列化） =========
         sb.append("=== 候选计划 ===\n");

@@ -56,6 +56,9 @@ public class InterruptHandler {
             if (currentXid != null) {
                 RootContext.unbind();
             }
+            // 显式标记中断步骤，用于恢复时识别自身
+            runtimeContext.put(stepId + ".interrupted", true);
+
             // 2. 构建检查点上下文
             InterruptContext ctx = InterruptContext.builder()
                     .xid(xid)

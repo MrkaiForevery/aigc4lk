@@ -101,26 +101,30 @@ public class HybridOrchestratorManager {
             OrchestrationPlan plan = deserializePlan(ctx.getPlanJson());
             Map<String, Object> runtimeContext = ctx.getRuntimeContext();
 
-            // 【改动】基于 runtimeContext 找出剩余步骤，而不是用 stepIndex 截取
-            List<Step> remainingSteps = getRemainingSteps(plan.getSteps(), runtimeContext);
+            // 直接使用完整步骤列表，不再提前过滤，让后续具体执行时，其内部方法进行排序
+            List<Step> allSteps = plan.getSteps();
 
-            if (remainingSteps.isEmpty()) {
+            if (allSteps.isEmpty()) {
                 commitTransaction(xid);
                 return buildFinalResult(plan, ctx, plan.getSteps(), Collections.emptyList(), xid);
             }
 
             // 保留原执行模式，不强制改为顺序
             OrchestrationPlan remainingPlan = OrchestrationPlan.builder()
+                    .mode(plan.getMode())
                     .planId(plan.getPlanId())
                     .executionMode(plan.getExecutionMode())  // 保留原模式
-                    .steps(remainingSteps)
+                    .steps(allSteps)
                     .build();
 
             MemoryContext memoryCtx = memoryContextBuilder.build(ctx.getUserId(), ctx.getThreadId(), "");
             List<ExecutionResult> newResults = graphExecutor.execute(
                     remainingPlan,
-                    ctx.getThreadId(), ctx.getUserId(),
-                    tokens, xid, memoryCtx,
+                    ctx.getThreadId(),
+                    ctx.getUserId(),
+                    tokens,
+                    xid,
+                    memoryCtx,
                     runtimeContext
             );
 
@@ -137,7 +141,8 @@ public class HybridOrchestratorManager {
      */
     private List<Step> getRemainingSteps(List<Step> allSteps, Map<String, Object> runtimeContext) {
         return allSteps.stream()
-                .filter(step -> !runtimeContext.containsKey(step.getId() + ".output"))
+                .filter(step -> !runtimeContext.containsKey(step.getId() + ".output")) //过滤已经正常完成的步骤
+                .filter(step -> !runtimeContext.containsKey(step.getId() + ".interrupted")) // 过滤中断步骤
                 .collect(Collectors.toList());
     }
 
@@ -200,6 +205,7 @@ public class HybridOrchestratorManager {
         // 【改动】遍历所有步骤，通过 runtimeContext 判断是否已完成
         for (Step step : allSteps) {
             String outputKey = step.getId() + ".output";
+            String interruptKey = step.getId() + ".interrupted";
             if (runtimeContext.containsKey(outputKey)) {
                 // 已完成步骤，从上下文取输出
                 allResults.add(ExecutionResult.builder()
@@ -208,17 +214,19 @@ public class HybridOrchestratorManager {
                         .output(runtimeContext.get(outputKey) instanceof Map ?
                                 (Map<String, Object>) runtimeContext.get(outputKey) : null)
                         .build());
-            } else if (step.getId().equals(ctx.getCurrentStepId())) {
+            } else if (runtimeContext.containsKey(interruptKey)) {
                 // 中断步骤本身
-                allResults.add(ExecutionResult.builder()
-                        .stepId(step.getId())
-                        .success(false)
-                        .command(ExecutionResult.Command.builder()
-                                .type(ctx.getCommandType())
-                                .message(ctx.getQuestion())
-                                .requiredScopes(ctx.getRequiredScopes())
-                                .build())
-                        .build());
+                if (step.getId().equals(ctx.getCurrentStepId())) {
+                    allResults.add(ExecutionResult.builder()
+                            .stepId(step.getId())
+                            .success(false)
+                            .command(ExecutionResult.Command.builder()
+                                    .type(ctx.getCommandType())
+                                    .message(ctx.getQuestion())
+                                    .requiredScopes(ctx.getRequiredScopes())
+                                    .build())
+                            .build());
+                }
             }
             // 其他未完成的步骤不加入结果，等恢复后由 newResults 补充
         }

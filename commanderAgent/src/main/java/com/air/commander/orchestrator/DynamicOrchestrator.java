@@ -145,6 +145,9 @@ public class DynamicOrchestrator {
     /**
      * 解析单个步骤
      */
+    /**
+     * 解析单个步骤
+     */
     private Step parseStep(Map<String, Object> stepMap) {
         Step.StepBuilder builder = Step.builder()
                 .id(getString(stepMap, "id"))
@@ -152,12 +155,37 @@ public class DynamicOrchestrator {
                 .agent(getString(stepMap, "agent"))
                 .task(getString(stepMap, "task"))
                 .input(getMap(stepMap, "input"))
-                .dependsOn(getStringList(stepMap, "dependsOn"));
+                .dependsOn(getStringList(stepMap, "dependsOn"))
+                .mandatory(Boolean.TRUE.equals(stepMap.get("mandatory")))
+                .includeChatHistory(Boolean.TRUE.equals(stepMap.get("includeChatHistory")));
 
-        // 可选：解析检查点配置
+        // 解析 checkpoint 配置（已有逻辑）
         parseCheckpoint(stepMap).ifPresent(builder::checkpoint);
 
+        // 解析 conditionConfig 配置（新增逻辑）
+        parseConditionConfig(stepMap).ifPresent(builder::conditionConfig);
+
         return builder.build();
+    }
+
+    /**
+     * 解析条件分支配置
+     */
+    private Optional<Step.ConditionConfig> parseConditionConfig(Map<String, Object> stepMap) {
+        Map<String, Object> cc = getMap(stepMap, "conditionConfig");
+        if (cc == null || cc.isEmpty()) {
+            return Optional.empty();
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, String> branches = (Map<String, String>) cc.get("branches");
+
+        return Optional.of(Step.ConditionConfig.builder()
+                .expression(getString(cc, "expression"))
+                .evaluationMethod(getString(cc, "evaluationMethod"))
+                .branches(branches)
+                .defaultStepId(getString(cc, "defaultStepId"))
+                .build());
     }
 
     /**
