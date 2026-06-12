@@ -1,6 +1,7 @@
 package com.air.commander.orchestrator;
 
 import com.air.commander.Prompt.PromptManagerBuilder;
+import com.air.commander.chat.ChatClientSelector;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.PlanEvaluationResult;
@@ -34,12 +35,12 @@ public class PlanEvaluator {
     private final ResilienceManager resilienceManager;
     private final ObjectMapper objectMapper;
 
-    public PlanEvaluator(@Qualifier("reasoningModelClient") ChatClient reasoningModelClient,
+    public PlanEvaluator(ChatClientSelector chatClientSelector,
                          PlanValidator planValidator,
                          PromptManagerBuilder promptManagerBuilder,
                          ResilienceManager resilienceManager,
                          ObjectMapper objectMapper) {
-        this.reasoningModelClient = reasoningModelClient;
+        this.reasoningModelClient = chatClientSelector.getClient("reasoningModelClient");
         this.planValidator = planValidator;
         this.resilienceManager = resilienceManager;
         this.objectMapper = objectMapper;
@@ -89,28 +90,7 @@ public class PlanEvaluator {
     private PlanEvaluationResult parseEvaluationResult(String llmOutput) {
         try {
             Map<String, Object> map = objectMapper.readValue(llmOutput, Map.class);
-            String winner = (String) map.getOrDefault("winner", "A");
-
-            Map<String, PlanEvaluationResult.DimensionScores> scores = new HashMap<>();
-            Map<String, Object> scoresMap = (Map<String, Object>) map.get("scores");
-            if (scoresMap != null) {
-                for (Map.Entry<String, Object> entry : scoresMap.entrySet()) {
-                    String label = entry.getKey();                    // 动态标签 A, B, C...
-                    Map<String, Object> dimMap = (Map<String, Object>) entry.getValue();
-                    scores.put(label, PlanEvaluationResult.DimensionScores.builder()
-                            .agentAccuracy(getInt(dimMap, "agentAccuracy"))
-                            .dataFlow(getInt(dimMap, "dataFlow"))
-                            .checkpoint(getInt(dimMap, "checkpoint"))
-                            .efficiency(getInt(dimMap, "efficiency"))
-                            .build());
-                }
-            }
-
-            return PlanEvaluationResult.builder()
-                    .winner(winner)
-                    .scores(scores)
-                    .reason((String) map.getOrDefault("reason", ""))
-                    .build();
+            return objectMapper.convertValue(map, PlanEvaluationResult.class);
         } catch (Exception e) {
             log.error("解析评估结果失败，降级处理", e);
             return PlanEvaluationResult.builder()
@@ -121,8 +101,4 @@ public class PlanEvaluator {
         }
     }
 
-    private int getInt(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        return value instanceof Number ? ((Number) value).intValue() : 5;
-    }
 }

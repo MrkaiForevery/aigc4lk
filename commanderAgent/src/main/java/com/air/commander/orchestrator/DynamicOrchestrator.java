@@ -2,6 +2,7 @@ package com.air.commander.orchestrator;
 
 import com.air.commander.Prompt.PromptManagerBuilder;
 import com.air.commander.a2a.BaseNacosA2ARouter;
+import com.air.commander.chat.ChatClientSelector;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.Step;
@@ -11,12 +12,9 @@ import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * 动态编排器
@@ -26,23 +24,19 @@ import java.util.stream.Collectors;
 @Component
 public class DynamicOrchestrator {
 
-    private final ConcurrentHashMap<String,ChatClient> chatClientMaps = new ConcurrentHashMap<>();
+    private final Map<String,ChatClient> chatClientMap;
     private final BaseNacosA2ARouter baseNacosA2ARouter;
     private final PlanValidator planValidator;
     private final ResilienceManager resilienceManager;
     private final ObjectMapper objectMapper;
     private final PromptManagerBuilder promptManagerBuilder;
 
-    public DynamicOrchestrator(@Qualifier("reasoningModelClient") ChatClient reasoningModelClient,
-                               @Qualifier("fastModelClient") ChatClient fastModelClient,
-                               @Qualifier("plusModelClient") ChatClient plusModelClient,
+    public DynamicOrchestrator(ChatClientSelector chatClientSelector,
                                BaseNacosA2ARouter baseNacosA2ARouter,
                                PlanValidator planValidator,
                                ResilienceManager resilienceManager,
                                PromptManagerBuilder promptManagerBuilder) {
-        chatClientMaps.put("reasoningModelClient",reasoningModelClient);
-        chatClientMaps.put("fastModelClient",fastModelClient);
-        chatClientMaps.put("plusModelClient",plusModelClient);
+        this.chatClientMap = chatClientSelector.getAllMap();
         this.baseNacosA2ARouter = baseNacosA2ARouter;
         this.planValidator = planValidator;
         this.resilienceManager = resilienceManager;
@@ -80,7 +74,7 @@ public class DynamicOrchestrator {
      * 调用 LLM 生成计划并解析，失败时返回降级计划
      */
     private OrchestrationPlan tryBuildPlan(String prompt, String choseChatClientBeanName) {
-        ChatClient chatClient = this.chatClientMaps.get(choseChatClientBeanName);
+        ChatClient chatClient = this.chatClientMap.get(choseChatClientBeanName);
         String llmOutput = resilienceManager.executeWithFullProtection(
                 "llm-reasoning-model",
                 () -> chatClient.prompt(prompt).call().content(),
@@ -88,17 +82,15 @@ public class DynamicOrchestrator {
         );
         try {
             Map<String, Object> planMap = objectMapper.readValue(llmOutput, Map.class);
-            List<Step> steps = parseSteps(planMap);
-            return OrchestrationPlan.builder()
-                    .planId(UUID.randomUUID().toString())
-                    .executionMode(detectMode(planMap))
-                    .steps(steps)
-                    .build();
+            planMap.put("planId",UUID.randomUUID().toString());
+            OrchestrationPlan plan = objectMapper.convertValue(planMap, OrchestrationPlan.class);
+            return plan;
         } catch (Exception e) {
             log.error("解析 LLM 生成的计划失败，返回降级计划", e);
             return buildFallbackPlan();
         }
     }
+
 
     /**
      * 注入 userQuery 到每个步骤的 input 中
@@ -127,132 +119,4 @@ public class DynamicOrchestrator {
                 .steps(List.of(fallbackStep))
                 .build();
     }
-
-
-    /**
-     * 解析 LLM 返回的步骤列表
-     */
-    private List<Step> parseSteps(Map<String, Object> planMap) {
-        List<Map<String, Object>> stepList = getList(planMap, "steps");
-        if (stepList == null || stepList.isEmpty()) {
-            return List.of();
-        }
-        return stepList.stream()
-                .map(this::parseStep)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 解析单个步骤
-     */
-    /**
-     * 解析单个步骤
-     */
-    private Step parseStep(Map<String, Object> stepMap) {
-        Step.StepBuilder builder = Step.builder()
-                .id(getString(stepMap, "id"))
-                .type(Step.StepType.valueOf(getString(stepMap, "type")))
-                .agent(getString(stepMap, "agent"))
-                .task(getString(stepMap, "task"))
-                .input(getMap(stepMap, "input"))
-                .dependsOn(getStringList(stepMap, "dependsOn"))
-                .mandatory(Boolean.TRUE.equals(stepMap.get("mandatory")))
-                .includeChatHistory(Boolean.TRUE.equals(stepMap.get("includeChatHistory")));
-
-        // 解析 checkpoint 配置（已有逻辑）
-        parseCheckpoint(stepMap).ifPresent(builder::checkpoint);
-
-        // 解析 conditionConfig 配置（新增逻辑）
-        parseConditionConfig(stepMap).ifPresent(builder::conditionConfig);
-
-        return builder.build();
-    }
-
-    /**
-     * 解析条件分支配置
-     */
-    private Optional<Step.ConditionConfig> parseConditionConfig(Map<String, Object> stepMap) {
-        Map<String, Object> cc = getMap(stepMap, "conditionConfig");
-        if (cc == null || cc.isEmpty()) {
-            return Optional.empty();
-        }
-
-        @SuppressWarnings("unchecked")
-        Map<String, String> branches = (Map<String, String>) cc.get("branches");
-
-        return Optional.of(Step.ConditionConfig.builder()
-                .expression(getString(cc, "expression"))
-                .evaluationMethod(getString(cc, "evaluationMethod"))
-                .branches(branches)
-                .defaultStepId(getString(cc, "defaultStepId"))
-                .build());
-    }
-
-    /**
-     * 解析检查点配置（如果存在）
-     */
-    private Optional<Step.CheckpointConfig> parseCheckpoint(Map<String, Object> stepMap) {
-        Map<String, Object> cp = getMap(stepMap, "checkpoint");
-        if (cp == null || cp.isEmpty()) {
-            return Optional.empty();
-        }
-
-        return Optional.of(Step.CheckpointConfig.builder()
-                .type(Step.CheckpointConfig.CheckpointType.valueOf(getString(cp, "type")))
-                .question(getString(cp, "question"))
-                .requiredScopes(getStringList(cp, "requiredScopes"))
-                .timeoutMinutes(getInt(cp, "timeoutMinutes", 30))
-                .onAgree(getString(cp, "onAgree"))
-                .onReject(getString(cp, "onReject"))
-                .build());
-    }
-
-    /**
-     * 提供默认兜底得执行模式
-     */
-    private OrchestrationPlan.ExecutionMode detectMode(Map<String, Object> planMap) {
-        try {
-            return OrchestrationPlan.ExecutionMode.valueOf(
-                    (String) planMap.getOrDefault("executionMode", "SEQUENTIAL"));
-        } catch (Exception e) {
-            return OrchestrationPlan.ExecutionMode.SEQUENTIAL;
-        }
-    }
-
-    // ========== 安全的 Map 取值工具方法 ==========
-
-    @SuppressWarnings("unchecked")
-    private String getString(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private int getInt(Map<String, Object> map, String key, int defaultValue) {
-        Object value = map.get(key);
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
-        }
-        return defaultValue;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> getMap(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        return value instanceof Map ? (Map<String, Object>) value : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> getList(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        return value instanceof List ? (List<Map<String, Object>>) value : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> getStringList(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        return value instanceof List ? (List<String>) value : List.of();
-    }
-
-
 }

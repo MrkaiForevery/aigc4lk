@@ -1,5 +1,6 @@
 package com.air.commander.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,6 +15,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class OrchestrationPlan {
     //编排计划的唯一标识，用于日志追踪、案例入库、崩溃恢复时重新加载计划。
     private String planId;
@@ -69,11 +71,32 @@ public class OrchestrationPlan {
 
     @Data
     @Builder
-    @NoArgsConstructor   // ← 添加
-    @AllArgsConstructor  // ← 添加
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CompetitiveConfig {
-        private List<String> competitors;
-        private String selectionCriteria;
+        private List<CompetitiveGroup> groups;        // 多个竞争组（顺序执行）
+        private String selectionCriteria;             // 选择标准描述（如“选最全面的”、“选最准确的”）
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CompetitiveGroup {
+        private String groupId;                       // 竞争组唯一标识
+        private List<Competitor> competitors;         // 竞争元素列表
+        private String selectorStepId;                // 本组的评审步骤 ID（必须存在于全局 steps 中）
+        private String selectionCriteria;             // 本组的选择标准（可选，覆盖全局配置）
+        private int maxConcurrency;                   // 最大并行度（可选，默认等于竞争者数量）
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Competitor {
+        private String competitorId;                  // 竞争者标识
+        private List<String> stepIds;                 // 该竞争者包含的步骤 ID 列表（在全局 steps 中定义）
     }
 
     @Data

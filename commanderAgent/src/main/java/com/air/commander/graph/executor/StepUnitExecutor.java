@@ -2,8 +2,8 @@ package com.air.commander.graph.executor;
 
 import com.air.commander.Prompt.PromptManagerBuilder;
 import com.air.commander.a2a.BaseNacosA2ARouter;
-import com.air.commander.chat.SupportChatModeType;
-import com.air.commander.contract.DataContractEngine;
+import com.air.commander.chat.ChatClientSelector;
+import com.air.commander.conversation.contract.DataContractEngine;
 import com.air.commander.model.ExecutionResult;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.Step;
@@ -12,7 +12,6 @@ import com.air.commander.resilience.ResilienceManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -24,19 +23,19 @@ import java.util.Map;
 @Component
 public class StepUnitExecutor {
 
-    private final ChatClient easyChatClient;
+    private final ChatClientSelector chatClientSelector;
     private final BaseNacosA2ARouter a2aRouter;
 
     private final PromptManagerBuilder promptManagerBuilder;
     private final ResilienceManager resilience;
     private final DataContractEngine dataContractEngine;
 
-    public StepUnitExecutor(@Qualifier("fastModelClient")  ChatClient easyChatClient,
+    public StepUnitExecutor(ChatClientSelector chatClientSelector,
                             BaseNacosA2ARouter a2aRouter,
                             PromptManagerBuilder promptManagerBuilder,
                             ResilienceManager resilience,
                             DataContractEngine dataContractEngine) {
-        this.easyChatClient = easyChatClient;
+        this.chatClientSelector = chatClientSelector;
         this.a2aRouter = a2aRouter;
         this.promptManagerBuilder = promptManagerBuilder;
         this.resilience = resilience;
@@ -130,8 +129,13 @@ public class StepUnitExecutor {
     private ExecutionResult doLLMCallLogic(Step step, Map<String, Object> runtimeContext, MemoryContext memoryCtx) {
         // 1. 构建 Prompt：使用 step 中的 task 或 input
         String prompt = null;
+        // 判断是否为竞争评审步骤：input 中包含竞争组输出（key 以 .output 结尾）
         try {
-            prompt = promptManagerBuilder.buildGraphExecutorLLMStepPrompt(step, runtimeContext, memoryCtx);
+            if (step.isCompetitiveSelectorStepFlag()) {
+                prompt = promptManagerBuilder.buildCompetitionJudgeStepPrompt(step, runtimeContext, memoryCtx);
+            } else {
+                prompt = promptManagerBuilder.buildGraphExecutorLLMStepPrompt(step, runtimeContext, memoryCtx);
+            }
         } catch (JsonProcessingException e) {
             log.error("构建LLMCall的prompt提示词失败！！");
             throw new RuntimeException(e);
@@ -140,9 +144,10 @@ public class StepUnitExecutor {
         // 2. 调用模型（带弹性保护）
         String finalPrompt = prompt;
         long startTime = System.currentTimeMillis();
+        ChatClient chatClient = chatClientSelector.getClient(step.getModel());
         String llmOutput = resilience.executeWithFullProtection(
                 "llm-step-call",
-                () -> easyChatClient.prompt(finalPrompt).call().content(),
+                () -> chatClient.prompt(finalPrompt).call().content(),
                 () -> "LLM调用降级，返回默认回复"
         );
 
@@ -167,6 +172,7 @@ public class StepUnitExecutor {
         Step enrichedStep = Step.builder()
                 .id(step.getId())
                 .type(step.getType())
+                .model(step.getModel())
                 .agent(step.getAgent())
                 .task(step.getTask())
                 .input(stepInput)
@@ -174,6 +180,7 @@ public class StepUnitExecutor {
                 .mandatory(step.isMandatory())
                 .checkpoint(step.getCheckpoint())
                 .dataContract(step.getDataContract())
+                .competitiveSelectorStepFlag(step.isCompetitiveSelectorStepFlag())
                 .build();
 
         // 自动为条件步骤设置失败策略，避免条件判断失败触发回滚

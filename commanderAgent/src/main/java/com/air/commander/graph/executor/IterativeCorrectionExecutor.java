@@ -14,6 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 循环纠正模式执行器
+ */
 @Slf4j
 @Component
 public class IterativeCorrectionExecutor {
@@ -70,7 +73,7 @@ public class IterativeCorrectionExecutor {
             // 1. 执行当前循环之前的普通步骤
             List<Step> preLoopSteps = getStepsUpTo(orderedAll, currentStepIndex, loop.getFirstStepId());
             for (Step step : preLoopSteps) {
-                if (isStepCompleted(step, context)) continue;
+                if (graphCommonDataProcessor.isStepCompleted(step, context)) continue;
                 ExecutionResult r = stepUnitExecutor.executeSingleStep(step, context, threadId, userId, tokens, xid, memoryCtx);
                 allResults.add(r);
                 if (!graphCommonDataProcessor.postProcessStepResult(r, step, context, plan, allResults.size() - 1, xid, userId, threadId)) {
@@ -95,7 +98,7 @@ public class IterativeCorrectionExecutor {
         // 4. 执行最后一个循环之后的剩余步骤
         List<Step> postLoopSteps = orderedAll.subList(currentStepIndex, orderedAll.size());
         for (Step step : postLoopSteps) {
-            if (isStepCompleted(step, context)) continue;
+            if (graphCommonDataProcessor.isStepCompleted(step, context)) continue;
             ExecutionResult r = stepUnitExecutor.executeSingleStep(step, context, threadId, userId, tokens, xid, memoryCtx);
             allResults.add(r);
             if (!graphCommonDataProcessor.postProcessStepResult(r, step, context, plan, allResults.size() - 1, xid, userId, threadId)) {
@@ -148,7 +151,7 @@ public class IterativeCorrectionExecutor {
             if ("MAIN".equals(phase)) {
                 for (int i = mainIndex; i < mainSteps.size(); i++) {
                     Step step = mainSteps.get(i);
-                    if (isStepCompleted(step, context)) continue;
+                    if (graphCommonDataProcessor.isStepCompleted(step, context)) continue;
 
                     ExecutionResult r = stepUnitExecutor.executeSingleStep(step, context, threadId, userId, tokens, xid, memoryCtx);
                     results.add(r);
@@ -166,7 +169,7 @@ public class IterativeCorrectionExecutor {
 
             // 执行评估步骤
             if ("EVALUATE".equals(phase) || "MAIN".equals(phase)) {
-                if (!isStepCompleted(evaluatorStep, context)) {
+                if (!graphCommonDataProcessor.isStepCompleted(evaluatorStep, context)) {
                     ExecutionResult evalR = stepUnitExecutor.executeSingleStep(evaluatorStep, context, threadId, userId, tokens, xid, memoryCtx);
                     results.add(evalR);
 
@@ -188,7 +191,7 @@ public class IterativeCorrectionExecutor {
 
             // 执行修正步骤（如果存在）
             if (correctorStep != null && ("CORRECT".equals(phase) || "EVALUATE".equals(phase) || "MAIN".equals(phase))) {
-                if (!isStepCompleted(correctorStep, context)) {
+                if (!graphCommonDataProcessor.isStepCompleted(correctorStep, context)) {
                     ExecutionResult correctR = stepUnitExecutor.executeSingleStep(correctorStep, context, threadId, userId, tokens, xid, memoryCtx);
                     results.add(correctR);
 
@@ -281,8 +284,5 @@ public class IterativeCorrectionExecutor {
         return 0;
     }
 
-    // 判断步骤是否已完成
-    private boolean isStepCompleted(Step step, Map<String, Object> context) {
-        return context.containsKey(step.getId() + ".output") || context.containsKey(step.getId() + ".interrupted");
-    }
+
 }

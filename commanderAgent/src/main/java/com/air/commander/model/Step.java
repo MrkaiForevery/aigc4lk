@@ -72,6 +72,10 @@ public class Step {
     /** 控制每一步LLM执行时是否需要读取用户历史的会话记忆,默认false不包含对话历史**/
     private boolean includeChatHistory = false;
 
+    /**标记该步骤是否是竞争模式里面得评审步骤**/
+    private boolean competitiveSelectorStepFlag = false;
+
+
     @Data
     @Builder
     @NoArgsConstructor

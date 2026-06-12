@@ -1,6 +1,6 @@
 package com.air.commander.graph.common;
 
-import com.air.commander.contract.DataContractEngine;
+import com.air.commander.conversation.contract.DataContractEngine;
 import com.air.commander.interrupt.InterruptHandler;
 import com.air.commander.model.ExecutionResult;
 import com.air.commander.model.OrchestrationPlan;
@@ -86,5 +86,8 @@ public class GraphCommonDataProcessor {
     }
 
 
-
+    // 判断步骤是否已完成
+    public boolean isStepCompleted(Step step, Map<String, Object> context) {
+        return context.containsKey(step.getId() + ".output") || context.containsKey(step.getId() + ".interrupted");
+    }
 }

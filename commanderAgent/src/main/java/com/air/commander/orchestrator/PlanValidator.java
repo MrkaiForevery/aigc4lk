@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 
 /**
  * 计划校验器
- * 对LLM生成的执行计划结果进行简单校验
+ * 对LLM生成的执行计划结果进行格式结构校验
  */
 @Component
 public class PlanValidator {
@@ -38,6 +38,9 @@ public class PlanValidator {
         // L4 安全（可选）
         errors.addAll(validateSecurity(plan));
 
+        // L5 定制化生成Competitive类型的plan时，校验依赖字段的合理性
+        errors.addAll(validateCompetitiveDependStructure(plan));
+
         return new ValidationResult(errors.isEmpty(), errors);
     }
 
@@ -61,6 +64,8 @@ public class PlanValidator {
                 errors.addAll(validateCheckpointStructure(step));
             }
         }
+
+
         return errors;
     }
 
@@ -76,6 +81,35 @@ public class PlanValidator {
         if (cp.getType() == Step.CheckpointConfig.CheckpointType.CREDENTIAL
                 && (cp.getRequiredScopes() == null || cp.getRequiredScopes().isEmpty())) {
             errors.add("步骤 " + step.getId() + " 的 CREDENTIAL 检查点缺少 requiredScopes");
+        }
+        return errors;
+    }
+
+    private List<String> validateCompetitiveDependStructure(OrchestrationPlan plan){
+        List<String> errors = new ArrayList<>();
+        if (plan.getExecutionMode() == OrchestrationPlan.ExecutionMode.COMPETITIVE && plan.getCompetitiveConfig() != null) {
+            for (OrchestrationPlan.CompetitiveGroup group : plan.getCompetitiveConfig().getGroups()) {
+                Step selectorStep = findStepById(plan.getSteps(), group.getSelectorStepId());
+                if (selectorStep != null) {
+                    Set<String> requiredDeps = new HashSet<>();
+                    // 收集所有竞争者的最后步骤 ID
+                    for (OrchestrationPlan.Competitor competitor : group.getCompetitors()) {
+                        if (!competitor.getStepIds().isEmpty()) {
+                            String lastStepId = competitor.getStepIds().get(competitor.getStepIds().size() - 1);
+                            requiredDeps.add(lastStepId);
+                        }
+                    }
+                    // 检查评审步骤的 dependsOn 是否包含了所有必需的依赖
+                    List<String> actualDeps = selectorStep.getDependsOn() != null ?
+                            selectorStep.getDependsOn() : List.of();
+                    for (String requiredDep : requiredDeps) {
+                        if (!actualDeps.contains(requiredDep)) {
+                            errors.add("竞争组 " + group.getGroupId() + " 的评审步骤 " +
+                                    selectorStep.getId() + " 缺少对竞争者步骤 " + requiredDep + " 的依赖");
+                        }
+                    }
+                }
+            }
         }
         return errors;
     }
@@ -152,6 +186,12 @@ public class PlanValidator {
         // 检查是否携带 userQuery 且 userQuery 中不应包含明文密码等（如果系统有要求）
         // 对 CREDENTIAL 检查点，验证 requiredScopes 是否在许可范围内
         return errors;
+    }
+
+
+    // ==================== 辅助方法 ====================
+    public Step findStepById(List<Step> steps, String stepId) {
+        return steps.stream().filter(s -> s.getId().equals(stepId)).findFirst().orElse(null);
     }
 }
 

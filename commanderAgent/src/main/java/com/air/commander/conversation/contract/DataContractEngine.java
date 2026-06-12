@@ -1,4 +1,4 @@
-package com.air.commander.contract;
+package com.air.commander.conversation.contract;
 
 import com.air.commander.model.ExecutionResult;
 import com.air.commander.model.Step;

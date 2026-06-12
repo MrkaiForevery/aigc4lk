@@ -1,6 +1,7 @@
 package com.air.commander.intent;
 
 import com.air.commander.Prompt.PromptManagerBuilder;
+import com.air.commander.chat.ChatClientSelector;
 import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.air.commander.model.IntentResult;
 import com.air.commander.model.MemoryContext;
@@ -36,15 +37,16 @@ public class IntentClassifier {
     private final PromptManagerBuilder promptManagerBuilder;
 
     public IntentClassifier(RemoteConfigLoader configLoader,
-                            @Qualifier(FAST_MODEL_CLIENT) ChatClient fastchatClient,
+                            ChatClientSelector chatClientSelector,
                             ResilienceManager resilienceManage,
                             PromptManagerBuilder promptManagerBuilder,
                             ObjectMapper objectMapper) {
         this.configLoader = configLoader;
-        this.chatClient = fastchatClient;
+        this.chatClient = chatClientSelector.getClient(FAST_MODEL_CLIENT);
         this.resilienceManager = resilienceManage;
         this.promptManagerBuilder = promptManagerBuilder;
         this.objectMapper = objectMapper;
+
     }
 
     /**
