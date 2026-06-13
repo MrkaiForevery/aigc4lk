@@ -7,9 +7,9 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum SupportChatModeType {
 
-    QWEN_TURBO("qwen","qwen-turbo","fastModel","fastModelClient"),
-    QWEN_LONG("qwen","qwen-long","reasoningModel","reasoningModelClient"),
-    QWEN_PLUS("qwen","qwen-plus","plusModel","plusModelClient");
+    QWEN_TURBO("qwen","qwen-long-latest","fastModel","fastModelClient"),
+    QWEN_LONG("qwen","deepseek-v4-pro","reasoningModel","reasoningModelClient"),
+    QWEN_PLUS("qwen","glm-5","plusModel","plusModelClient");
 
     private final String platformName;
     private final String modelName;

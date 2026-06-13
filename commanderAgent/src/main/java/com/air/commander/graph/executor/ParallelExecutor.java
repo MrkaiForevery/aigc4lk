@@ -42,6 +42,11 @@ public class ParallelExecutor {
                                                   Map<String, String> tokens, String xid,
                                                   MemoryContext memoryCtx,
                                                   Map<String, Object> runtimeContext) {
+
+        log.debug("以Parallel模式开始执行任务..... ");
+
+        long start= System.currentTimeMillis();
+
         // 1. 拓扑排序，识别并行组
         List<List<Step>> parallelGroups = graphBuilder.buildParallelExecutionGroups(plan.getSteps());
         List<ExecutionResult> allResults = new ArrayList<>();
@@ -94,6 +99,9 @@ public class ParallelExecutor {
                 }
             }
         }
+
+        long end = System.currentTimeMillis();
+        log.debug("以Parallel模式执行任务结束，本次耗时:{}ms ",end-start);
         return allResults;
     }
 }

@@ -33,8 +33,8 @@ public class CompetitionOrchestratorEngine {
         // ========== 多模型并行生成候选 ==========
         log.info("=== plan执行计划候选生成开始 ===");
         List<CandidateGenerator.CandidatePlan> candidates = candidateGenerator.generate(userInput, memoryCtx);
-        log.info("阶段2完成: 生成{}个有效候选, duration={}ms",
-                candidates.size(), System.currentTimeMillis() - totalStart);
+        log.info("阶段2完成: 生成{}个有效候选:{} duration={}ms",
+                candidates.size(),candidates, System.currentTimeMillis() - totalStart);
 
         if (candidates.isEmpty()) {
             log.warn("无有效候选计划，使用降级策略");

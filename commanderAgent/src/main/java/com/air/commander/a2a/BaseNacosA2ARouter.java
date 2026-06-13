@@ -110,6 +110,9 @@ public class BaseNacosA2ARouter {
                                      String threadId,
                                      String xid,
                                      MemoryContext memoryCtx) {
+        log.debug("开始调用远程agent:{}..... ", step.getAgent());
+        long start = System.currentTimeMillis();
+
         String agentName = step.getAgent();
         if (agentName == null || agentName.isBlank()) {
             return ExecutionResult.builder()
@@ -142,7 +145,7 @@ public class BaseNacosA2ARouter {
         }
 
         // 带弹性保护的调用
-        return resilience.executeWithFullProtection(
+         ExecutionResult executionResult = resilience.executeWithFullProtection(
                 A2A_CALL,
                 () -> {
                     try {
@@ -183,6 +186,11 @@ public class BaseNacosA2ARouter {
                             .build();
                 }
         );
+
+        long end = System.currentTimeMillis();
+        log.debug("远程调用agent:{}结束，本次耗时:{}ms ",agentName,end-start);
+
+        return executionResult;
     }
 
     /**
@@ -216,7 +224,7 @@ public class BaseNacosA2ARouter {
         if (step.isIncludeChatHistory() && memoryCtx.getRecentMessages() != null) {
             // 只取最近3条有效消息
             List<MemoryContext.Message> memoryContexts = memoryCtx.getRecentMessages().stream()
-                    .filter(msg -> !"done" .equals(msg.getContent()))
+                    .filter(msg -> !"done".equals(msg.getContent()))
                     .skip(Math.max(0, memoryCtx.getRecentMessages().size() - 3))
                     .collect(Collectors.toList());
             metadata.put("recentMessages", memoryContexts);
@@ -321,7 +329,7 @@ public class BaseNacosA2ARouter {
             List<Map<String, Object>> parts = (List<Map<String, Object>>) artifact.get("parts");
             String text = "";
             for (Map<String, Object> part : parts) {
-                if ("text" .equals(part.get("kind"))) {
+                if ("text".equals(part.get("kind"))) {
                     text = (String) part.get("text");
                     break;
                 }

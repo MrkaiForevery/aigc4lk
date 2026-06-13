@@ -185,7 +185,7 @@ public class DataContractEngine {
      * 截断过长的值
      */
     private Object truncateIfNeeded(Object value, int maxLength) {
-        if (maxLength <= 0) maxLength = 5000;
+        if (maxLength <= 0) maxLength = 100000;
         
         if (value instanceof String str) {
             if (str.length() > maxLength) {
@@ -216,6 +216,6 @@ public class DataContractEngine {
 
     private int getMaxInputSize(StepDataContract contract) {
         return contract != null && contract.getMaxInputSize() > 0 ? 
-            contract.getMaxInputSize() : 5000;
+            contract.getMaxInputSize() : 100000;
     }
 }

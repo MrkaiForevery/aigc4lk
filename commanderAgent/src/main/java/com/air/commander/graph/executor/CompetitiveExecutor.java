@@ -86,6 +86,11 @@ public class CompetitiveExecutor {
                         .flatMap(c -> c.getStepIds().stream())
                         .collect(Collectors.toSet());
 
+                // 新增：把评审步骤 ID 也加进去
+                if (belongingGroup.getSelectorStepId() != null) {
+                    groupStepIds.add(belongingGroup.getSelectorStepId());
+                }
+
                 // 并行执行所有竞争者
                 Map<String, CompletableFuture<List<ExecutionResult>>> futures = new LinkedHashMap<>();
                 for (OrchestrationPlan.Competitor competitor : belongingGroup.getCompetitors()) {

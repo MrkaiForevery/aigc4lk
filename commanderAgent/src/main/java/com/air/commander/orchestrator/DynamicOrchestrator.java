@@ -58,7 +58,7 @@ public class DynamicOrchestrator {
 
         // 3. 校验并重试
         ValidationResult vr = planValidator.validateOrchestrationPlan(plan);
-        for (int retry = 0; retry < 2 && !vr.isValid(); retry++) {
+        for (int retry = 0; retry < 1 && !vr.isValid(); retry++) {
             String errors = String.join("; ", vr.getErrors());
             String retryPrompt = prompt + "\n\n上次计划有误：" + errors + "\n请修正后重新生成。";
             plan = tryBuildPlan(retryPrompt, choseChatClientBeanName);  // 再次尝试

@@ -135,6 +135,7 @@ public class PromptManagerBuilder {
         sb.append("   请在 input 中设置 \"includeChatHistory\": true，否则不要包含此字段或设置为 false。\n\n");
         sb.append("10. 当使用 COMPETITIVE 模式时，同一竞争组内的不同竞争者必须使用不同的模型（model 字段），以保证方案多样性。\n");
         sb.append("   每个竞争者可以是一个或多个步骤的串联（通过 stepIds 指定），评审步骤的 input 中应引用该组的聚合输出 {groupId.output}。\n\n");
+        sb.append("11. 建议所有 type 为 LLM_CALL 的步骤都显式指定 model 字段，从【可用大模型列表】中选择，以避免因默认模型变更导致执行结果不一致。\n");
 
 
         // ========= 条件分支 (CONDITIONAL) 规则 =========
@@ -219,11 +220,21 @@ public class PromptManagerBuilder {
         sb.append("   - 示例：竞争者A 的步骤为 [step_a1, step_a2]，竞争者B 的步骤为 [step_b1]，\n");
         sb.append("     竞争组中间有确认检查点 step_confirm，\n");
         sb.append("     则评审步骤 step_judge 的 dependsOn 应为 [\"step_a2\", \"step_b1\", \"step_confirm\"]。\n\n");
-        sb.append("6. 评审步骤的输入：\n");
-        sb.append("   - 评审步骤的 input 中必须包含 {groupId.output}，引用该竞争组的聚合输出。\n");
-        sb.append("   - 聚合输出是一个对象，包含所有竞争者的标识、最终输出和使用的模型。\n\n");
-        sb.append("   - 不要尝试引用单个竞争者的步骤输出（如 {step_analyze_1.output}），因为竞争者的输出已被重新组织到聚合输出中。\n");
-        sb.append("   - 聚合输出格式为：{\"competitor_A\": {\"competitorId\": \"A\", \"output\": {...}}, \"competitor_B\": {...}, ...}\n\n");
+        sb.append("6. 评审步骤的输入（必须严格遵守）：\n");
+        sb.append("   - 评审步骤的 input 中必须包含一个键名为 \"competitionResults\" 的字段。\n");
+        sb.append("   - 该字段的值必须使用占位符 \"{groupId.output}\"，其中 groupId 必须与你在 competitiveConfig 中为该竞争组定义的实际 groupId 完全一致。\n");
+        sb.append("   - 示例：若竞争组的 groupId 为 \"group_initial\"，则 input 中必须写：\n");
+        sb.append("     \"competitionResults\": \"{group_initial.output}\"\n");
+        sb.append("   - 执行引擎会在运行时自动将占位符替换为实际的聚合输出对象（格式如下方所述）。\n");
+        sb.append("   - 严禁手动拼接 JSON 字符串，只允许使用占位符。\n\n");
+        sb.append("   - 聚合输出是一个对象，结构为：\n");
+        sb.append("     {\n");
+        sb.append("       \"competitor_A\": {\"competitorId\": \"A\", \"output\": { \"content\": \"...\" }},\n");
+        sb.append("       \"competitor_B\": {\"competitorId\": \"B\", \"output\": { \"content\": \"...\" }},\n");
+        sb.append("       ...\n");
+        sb.append("     }\n");
+        sb.append("   - 该对象中的键名 \"competitor_A\"、\"competitor_B\" 等对应竞争者的 competitorId。\n");
+        sb.append("   - 不要尝试引用单个竞争者的步骤输出（如 {step_analyze_1.output}），因为这些输出已被聚合到上述结构中。\n\n");
         sb.append("7. 多个竞争组按数组顺序依次执行，前一个组的评审结果（或优胜者输出）可以作为后一个组竞争者的输入。\n");
         sb.append("   后一个组的竞争者应引用前一个组的评审步骤输出（通过 {step_judge.output}）。\n\n");
         sb.append("8. 评审步骤的输出格式要求：\n");
@@ -322,8 +333,8 @@ public class PromptManagerBuilder {
         sb.append("    - type: 步骤类型，A2A_DELEGATE/LLM_CALL/INTERRUPT 之一。\n");
         sb.append("    - agent: 当 type 为 A2A_DELEGATE 时必须，取值为可用 Agent 名称。\n");
         sb.append("    - task: 具体任务描述，必须是一个完整自然语言句子。\n");
-        sb.append("    - model: 当 type 为 LLM_CALL 时可选，指定使用的模型名称（如 \"reasoningModel\", \"plusModel\", \"fastModel\"）。\n");
-        sb.append("       在循环纠正模式中，评估步骤和修正步骤建议使用不同的模型（如评估用 \"plusModel\"，修正用 \"reasoningModel\"）。\n");
+        sb.append("    - model: 当 type 为 LLM_CALL 时可选，必须从【可用大模型列表】中选择指定使用的模型名称（如 \"plusModelClient\", \"reasoningModelClient\", \"fastModelClient\"）。\n");
+        sb.append("       在循环纠正模式中，评估步骤和修正步骤建议使用不同的模型（如评估用 \"reasoningModelClient\"，修正用 \"plusModelClient\"）。\n");
         sb.append("    - input: 对象，必须包含 'userQuery'（值为当前用户请求全文），以及步骤所需的其它参数。\n");
         sb.append("    - dependsOn: 字符串数组，列出本步骤依赖的前置步骤 id，无依赖则为空数组。\n");
         sb.append("    - checkpoint: 当 type 为 INTERRUPT 时可选，包含以下子字段：\n");
@@ -595,7 +606,8 @@ public class PromptManagerBuilder {
         sb.append("}\n\n");
 
         // ========= 最终指令 =========
-        sb.append("现在，根据以上所有信息，为当前用户请求生成一个 JSON 执行计划。");
+        sb.append("现在，根据以上所有信息，为当前用户请求生成一个 JSON 执行计划。\n");
+        sb.append("⚠️ 注意：你必须直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。\n");
         sb.append("直接输出 JSON，不要包含任何额外文字、注释或 Markdown 标记。");
 
         return sb.toString();
@@ -794,46 +806,40 @@ public class PromptManagerBuilder {
         String resolvedTask = replacePlaceholders(step.getTask(), context);
         sb.append("【任务】\n").append(resolvedTask).append("\n\n");
 
-        // ========= 2. 竞争者输出展示（结构化格式化） =========
+        // ========= 2. 竞争者输出展示 =========
         if (step.getInput() != null && !step.getInput().isEmpty()) {
             Map<String, Object> resolvedInput = resolveInput(step.getInput(), context);
+            Object competitionResults = resolvedInput.get("competitionResults");
 
-            for (Map.Entry<String, Object> entry : resolvedInput.entrySet()) {
-                Object value = entry.getValue();
-
-                // 兜底：如果值仍然是占位符字符串，尝试从 context 中查找聚合输出
-                if (value instanceof String str && str.matches("\\{[^}]+\\}")) {
-                    // 占位符未被替换，从 context 中查找以 .output 结尾且值为 Map 的键
-                    for (Map.Entry<String, Object> ctxEntry : context.entrySet()) {
-                        if (ctxEntry.getKey().endsWith(".output") && ctxEntry.getValue() instanceof Map) {
-                            value = ctxEntry.getValue();
-                            log.warn("占位符 {} 未被替换，使用聚合输出 {} 代替", str, ctxEntry.getKey());
-                            break;
-                        }
-                    }
+            // 如果值是字符串且看起来像 JSON，尝试反序列化（兼容 LLM 直接内联 JSON 字符串的情况）
+            if (competitionResults instanceof String str && (str.startsWith("{") || str.startsWith("["))) {
+                try {
+                    competitionResults = objectMapper.readValue(str, Map.class);
+                } catch (Exception e) {
+                    log.warn("无法将 competitionResults 从 JSON 字符串转换为 Map", e);
                 }
+            }
 
-                if (value instanceof Map) {
-                    Map<String, Object> competitorsMap = (Map<String, Object>) value;
-                    sb.append("【竞争者方案对比】\n");
-                    int index = 1;
-                    for (Map.Entry<String, Object> compEntry : competitorsMap.entrySet()) {
-                        Object compData = compEntry.getValue();
-                        if (compData instanceof Map) {
-                            Map<String, Object> comp = (Map<String, Object>) compData;
-                            String competitorId = comp.getOrDefault("competitorId", index).toString();
-                            Object output = comp.get("output");
+            if (competitionResults instanceof Map) {
+                Map<String, Object> competitorsMap = (Map<String, Object>) competitionResults;
+                sb.append("【竞争者方案对比】\n");
+                int index = 1;
+                for (Map.Entry<String, Object> compEntry : competitorsMap.entrySet()) {
+                    Object compData = compEntry.getValue();
+                    if (compData instanceof Map) {
+                        Map<String, Object> comp = (Map<String, Object>) compData;
+                        String competitorId = comp.getOrDefault("competitorId", index).toString();
+                        Object output = comp.get("output");
 
-                            sb.append("--- 竞争者 ").append(competitorId).append(" ---\n");
-                            if (output instanceof Map) {
-                                Object content = ((Map<?, ?>) output).get("content");
-                                sb.append(content != null ? content.toString() : "（无内容）").append("\n\n");
-                            } else {
-                                sb.append(output != null ? output.toString() : "（无内容）").append("\n\n");
-                            }
+                        sb.append("--- 竞争者 ").append(competitorId).append(" ---\n");
+                        if (output instanceof Map) {
+                            Object content = ((Map<?, ?>) output).get("content");
+                            sb.append(content != null ? content.toString() : "（无内容）").append("\n\n");
+                        } else {
+                            sb.append(output != null ? output.toString() : "（无内容）").append("\n\n");
                         }
-                        index++;
                     }
+                    index++;
                 }
             }
         }
@@ -843,13 +849,12 @@ public class PromptManagerBuilder {
                 (String) step.getInput().getOrDefault("selectionCriteria", "综合最优") : "综合最优";
         sb.append("【评审要求】\n");
         sb.append("请根据以下标准进行评审：").append(selectionCriteria).append("\n");
-        sb.append("以 JSON 格式输出评审结果（不要包含其他内容）：\n");
-        sb.append("{\n");
-        sb.append("  \"winnerId\": \"胜出竞争者标识（如 A、B、C）\",\n");
-        sb.append("  \"selectedOutput\": \"胜出者的完整输出内容（必须原样复制，不可省略或改写）\",\n");
-        sb.append("  \"reason\": \"选择理由\",\n");
-        sb.append("  \"score\": 评分（1-100）\n");
-        sb.append("}\n");
+        sb.append("你需要输出一个 JSON 对象，包含以下字段：\n");
+        sb.append("- winnerId: 胜出竞争者的标识（如 A、B、C）\n");
+        sb.append("- selectedOutput: 胜出者的完整输出内容，必须原样复制，不可省略或改写\n");
+        sb.append("- reason: 选择该竞争者的简要理由\n");
+        sb.append("- score: 综合评分（1-100 的整数）\n");
+        sb.append("请严格按照上述字段输出 JSON，不要添加任何额外文字。\n");
 
         return sb.toString();
     }
@@ -963,17 +968,17 @@ public class PromptManagerBuilder {
      */
     private Object truncateContextValue(Object value) throws JsonProcessingException {
         if (value instanceof String str) {
-            if (str.length() > 4000) {
-                return str.substring(0, 4000) + "\n...(内容过长，已截断，完整数据可引用占位符获取)";
+            if (str.length() > 100000) {
+                return str.substring(0, 100000) + "\n...(内容过长，已截断，完整数据可引用占位符获取)";
             }
             return str;
         }
         if (value instanceof Map map) {
             String json = objectMapper.writeValueAsString(map);
-            if (json.length() > 4000) {
+            if (json.length() > 100000) {
                 // 保留 map 中第一个 key 的完整内容，其余截断
                 // 或者转为摘要字符串
-                return json.substring(0, 4000) + "...(已截断)";
+                return json.substring(0, 100000) + "...(已截断)";
             }
             return value; // 如果 Map 不大，保持原样
         }

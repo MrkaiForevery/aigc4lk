@@ -38,6 +38,11 @@ public class SequentialExecutor {
                                                     String xid,
                                                     MemoryContext memoryCtx,
                                                     Map<String, Object> runtimeContext) {
+
+        log.debug("以Sequential模式开始执行任务..... ");
+
+         long start= System.currentTimeMillis();
+
         List<Step> orderedSteps = graphBuilder.buildSequentialExecutionOrder(plan);
 
         // 注入 userQuery 到全局上下文
@@ -63,6 +68,8 @@ public class SequentialExecutor {
                 break; // 中断或回滚，停止执行
             }
         }
+        long end = System.currentTimeMillis();
+        log.debug("以Sequential模式执行任务结束，本次耗时:{}ms ",end-start);
         return results;
     }
 

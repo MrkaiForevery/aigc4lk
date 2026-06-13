@@ -52,6 +52,10 @@ public class IterativeCorrectionExecutor {
                                                              Map<String, String> tokens, String xid,
                                                              MemoryContext memoryCtx,
                                                              Map<String, Object> runtimeContext) {
+        log.debug("以IterativeCorrection模式开始执行任务..... ");
+
+        long start= System.currentTimeMillis();
+
         if (memoryCtx != null && memoryCtx.getUserQuery() != null) {
             runtimeContext.put("userQuery", memoryCtx.getUserQuery());
         }
@@ -105,6 +109,9 @@ public class IterativeCorrectionExecutor {
                 return allResults;
             }
         }
+
+        long end = System.currentTimeMillis();
+        log.debug("以IterativeCorrection模式执行任务结束，本次耗时:{}ms ",end-start);
 
         return allResults;
     }

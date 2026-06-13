@@ -30,7 +30,10 @@ public class PlanValidator {
         errors.addAll(validateStructure(plan));
 
         // L2 逻辑校验
-        errors.addAll(validateLogic(plan));
+        if (!OrchestrationPlan.ExecutionMode.COMPETITIVE.equals(plan.getExecutionMode())) {
+            errors.addAll(validateLogic(plan));
+        }
+
 
         // L3 业务语义（仅当 L1,L2 通过时可选择执行，但这里收集全部）
         errors.addAll(validateBusinessSemantics(plan));
