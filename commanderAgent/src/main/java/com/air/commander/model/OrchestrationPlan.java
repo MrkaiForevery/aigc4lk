@@ -60,7 +60,7 @@ public class OrchestrationPlan {
     @AllArgsConstructor
     public static class CorrectionLoop {
         private String loopId;              // 循环的唯一标识
-        private String firstStepId;         // 循环的起始步骤 ID
+        private String firstStepId;         // 起始步骤 ID--该步骤只执行一次，不在循环内重复执行
         private String evaluatorStepId;     // 评估步骤 ID（循环结束标志）
         private String correctorStepId;     // 修正步骤 ID（可选）
         private int maxIterations;          // 最大迭代次数

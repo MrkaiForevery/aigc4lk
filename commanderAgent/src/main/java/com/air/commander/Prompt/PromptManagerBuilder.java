@@ -153,47 +153,38 @@ public class PromptManagerBuilder {
         sb.append("6. 步骤列表中只应包含条件步骤之后可能被执行到的分支步骤，不应出现永远不会被引用的步骤。\n\n");
 
         // ========= 循环纠正 (ITERATIVE_CORRECTION) 规则（完整版） =========
+        // ========= 循环纠正 (ITERATIVE_CORRECTION) 规则（评估-纠正模式） =========
         sb.append("【循环纠正 (ITERATIVE_CORRECTION) 规则】\n");
         sb.append("当 executionMode 为 ITERATIVE_CORRECTION 时，必须遵循以下规则：\n");
-        // 1. 评估步骤
-        sb.append("1. 计划中必须包含至少一个评估步骤（LLM_CALL），其 task 要求输出一个 JSON 对象，格式为：{\"score\": 85, \"issues\": [\"问题1\", \"问题2\"]}。\n");
-        sb.append("   其中 score 是 0-100 的整数评分，issues 是发现的具体问题列表（可选）。\n");
-        // 2. 主步骤序列
-        sb.append("2. 评估步骤之前的步骤是主步骤序列（即循环体），它们会被循环执行和修正。\n");
-        sb.append("   主步骤可以是一个或多个，它们之间的依赖关系通过 dependsOn 声明。\n");
-        // 3. 修正步骤
-        sb.append("3. 评估步骤之后可以有一个修正步骤（LLM_CALL 或 A2A_DELEGATE），用于根据评估反馈改进主步骤的输出。\n");
-        sb.append("   修正步骤的 input 中必须包含评估步骤的输出（通过 {step_evaluate.output} 引用）和需要修正的原始内容。\n");
-        sb.append("   如果不存在修正步骤，未达标时将直接重新执行主步骤。\n");
-        // 4. 配置
-        sb.append("4. 在 correctionConfig 中指定以下字段：\n");
-        sb.append("   - evaluatorStepId: 评估步骤的 ID（必填）。\n");
-        sb.append("   - correctorStepId: 修正步骤的 ID（可选，无修正步骤则省略）。\n");
-        sb.append("   - maxIterations: 最大迭代次数（必填，建议 3-5 次）。\n");
-        sb.append("   - qualityThreshold: 质量阈值 0-100（必填，建议 80-90）。\n");
-        sb.append("   - checkpointAfterEachIteration: 是否在每轮循环后插入确认检查点（可选，默认 false）。\n");
-        sb.append("   - checkpointOnMaxIterations: 达到最大迭代次数后是否插入检查点（可选，默认 true）。\n");
-        // 5. 检查点插入位置
-        sb.append("5. 检查点可以插入在以下位置：\n");
-        sb.append("   - 修正步骤之前：让用户确认是否需要修正（避免自动修正越改越差）。\n");
-        sb.append("   - 评估步骤之后、修正步骤之前：展示评估结果，让用户决定是否继续。\n");
-        sb.append("   - 主步骤序列中的高风险操作之前：如发送邮件、扣款等。\n");
-        // 6. 数据流
-        sb.append("6. 循环内的数据流规则：\n");
-        sb.append("   - 主步骤的输出通过 {stepX.output} 传递给评估步骤。\n");
-        sb.append("   - 评估步骤的输出通过 {step_evaluate.output} 传递给修正步骤。\n");
-        sb.append("   - 修正步骤的输出应替换或更新原始主步骤的输出，下一轮循环时主步骤应引用修正后的内容。\n");
-        sb.append("   - 如果存在多个循环闭环，前一个循环的最终输出通过占位符传递给后一个循环。\n");
-        // 7. 循环终止
-        sb.append("7. 循环终止条件（满足任一即退出）：\n");
+        // 1. 主步骤（只执行一次）
+        sb.append("1. 主步骤（firstStepId 指向的步骤）只执行一次，生成初始内容。该步骤不在循环内重复执行。\n\n");
+        // 2. 循环体组成
+        sb.append("2. 循环体仅由评估步骤和纠正步骤组成：\n");
+        sb.append("   - 评估步骤（evaluatorStepId）：对当前内容进行质量评分，输出 JSON 格式 {\"score\": 85, \"issues\": [\"问题1\"], \"suggestions\": [\"建议1\"]}。\n");
+        sb.append("   - 纠正步骤（correctorStepId）：根据评估反馈，直接修改内容并输出完整的修改后版本。\n");
+        sb.append("   - 纠正步骤的 input 必须包含当前内容（通过 {主步骤ID.output} 引用）和评估反馈（通过 {评估步骤ID.output} 引用）。\n\n");
+        // 3. 纠正步骤输出要求
+        sb.append("3. 纠正步骤必须输出修改后的完整内容，而非仅给出修改建议。执行引擎会自动用纠正步骤的输出覆盖主步骤的输出，使下一轮评估看到最新内容。\n\n");
+        // 4. 数据流规则
+        sb.append("4. 数据流与覆盖机制：\n");
+        sb.append("   - 主步骤输出存入 {主步骤ID.output}。\n");
+        sb.append("   - 评估步骤通过 {主步骤ID.output} 获取待评估内容。\n");
+        sb.append("   - 纠正步骤通过 {主步骤ID.output} 获取原始内容，通过 {评估步骤ID.output} 获取评估反馈。\n");
+        sb.append("   - 纠正步骤执行后，其输出会覆盖 {主步骤ID.output}，使得下一轮评估自动获得纠正后的最新内容。\n\n");
+        // 5. 循环终止
+        sb.append("5. 循环终止条件（满足任一即退出）：\n");
         sb.append("   - 评分 >= qualityThreshold（达标）。\n");
         sb.append("   - 达到 maxIterations（超过最大迭代次数）。\n");
-        sb.append("   - 用户在检查点选择终止。\n");
-        sb.append("   达到最大迭代次数且未达标时，应根据 checkpointOnMaxIterations 决定是否插入确认检查点。\n\n");
-        // 8. 循环和纠正适用不同模型
-        sb.append("8. 循环中的评估步骤和修正步骤应尽量使用不同的模型以获得客观评价和有效修正。\n");
-        sb.append("   - 评估步骤可指定 model 为 \"plusModel\"（更严格），修正步骤可指定 model 为 \"reasoningModel\"（更强）。\n");
-        sb.append("   - 主步骤的 model 可省略，使用默认模型。\n");
+        sb.append("   - 用户在检查点选择终止。\n\n");
+        // 6. 检查点语义（重要）
+        sb.append("6. 检查点语义要求：\n");
+        sb.append("   - 循环内检查点（checkpointAfterEachIteration=true 时）应使用询问语气，如“当前质量尚未达标，是否继续修正？”，不应预设质量已达标。\n");
+        sb.append("   - 循环结束后检查点（无论达标还是达到最大次数）应使用中性确认语气，如“优化流程已结束，请确认是否接受当前结果？”。\n");
+        sb.append("   - 检查点必须依赖评估步骤（而非纠正步骤），以确保循环结束时无论是否执行纠正都能正确触发。\n\n");
+        // 7. 模型选择建议
+        sb.append("7. 评估步骤和纠正步骤应尽量使用不同的模型以获得客观评价和有效修正。\n");
+        sb.append("   - 评估步骤可指定 model 为 \"plusModelClient\"（更严格），纠正步骤可指定 model 为 \"reasoningModelClient\"（更强）。\n");
+        sb.append("   - 主步骤的 model 可省略，使用默认模型。\n\n");
 
         // ========= 竞争执行 (COMPETITIVE) 规则（完整版） =========
         sb.append("【竞争执行 (COMPETITIVE) 规则】\n");
@@ -550,13 +541,13 @@ public class PromptManagerBuilder {
         sb.append("  \"steps\": [\n");
         sb.append("    {\"id\": \"step_collect\", \"type\": \"LLM_CALL\", \"task\": \"从多个权威来源搜集最新市场数据\", \"input\": {\"userQuery\": \"...\"}, \"dependsOn\": []},\n");
         sb.append("    {\"id\": \"step_eval_data\", \"type\": \"LLM_CALL\", \"model\": \"plusModelClient\", \"task\": \"评估数据质量，输出 JSON: {\\\"score\\\": 85, \\\"issues\\\": [...]}\", \"input\": {\"data\": \"{step_collect.output}\"}, \"dependsOn\": [\"step_collect\"]},\n");
-        sb.append("    {\"id\": \"step_fix_data\", \"type\": \"LLM_CALL\", \"model\": \"reasoningModelClient\", \"task\": \"根据评估反馈补充或修正数据\", \"input\": {\"data\": \"{step_collect.output}\", \"feedback\": \"{step_eval_data.output}\"}, \"dependsOn\": [\"step_eval_data\"]},\n");
-        sb.append("    {\"id\": \"step_data_confirm\", \"type\": \"INTERRUPT\", \"task\": \"数据质量达标，确认是否继续\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"数据质量已达标，是否继续生成报告？\"}, \"input\": {\"data\": \"{step_collect.output}\"}, \"dependsOn\": [\"step_fix_data\"]},\n");
+        sb.append("    {\"id\": \"step_fix_data\", \"type\": \"LLM_CALL\", \"model\": \"reasoningModelClient\", \"task\": \"根据评估反馈，直接修改数据并输出完整的修改后数据\", \"input\": {\"data\": \"{step_collect.output}\", \"feedback\": \"{step_eval_data.output}\"}, \"dependsOn\": [\"step_eval_data\"]},\n");
+        sb.append("    {\"id\": \"step_data_confirm\", \"type\": \"INTERRUPT\", \"task\": \"数据优化完成，确认是否继续\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"数据优化流程已结束，请确认是否继续生成报告？\"}, \"input\": {\"data\": \"{step_collect.output}\"}, \"dependsOn\": [\"step_eval_data\"]},\n");
         sb.append("    {\"id\": \"step_draft\", \"type\": \"LLM_CALL\", \"task\": \"基于数据撰写报告初稿\", \"input\": {\"data\": \"{step_collect.output}\", \"userQuery\": \"...\"}, \"dependsOn\": [\"step_data_confirm\"]},\n");
         sb.append("    {\"id\": \"step_eval_report\", \"type\": \"LLM_CALL\", \"model\": \"plusModelClient\", \"task\": \"评估报告质量，输出 JSON: {\\\"score\\\": 85, \\\"issues\\\": [...]}\", \"input\": {\"report\": \"{step_draft.output}\"}, \"dependsOn\": [\"step_draft\"]},\n");
-        sb.append("    {\"id\": \"step_confirm_fix\", \"type\": \"INTERRUPT\", \"task\": \"确认是否执行修正\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"报告质量未达标（当前评分：{step_eval_report.output.score}），是否执行自动修正？\"}, \"input\": {\"evaluation\": \"{step_eval_report.output}\"}, \"dependsOn\": [\"step_eval_report\"]},\n");
-        sb.append("    {\"id\": \"step_fix_report\", \"type\": \"LLM_CALL\", \"model\": \"reasoningModelClient\", \"task\": \"根据评估反馈修正报告\", \"input\": {\"report\": \"{step_draft.output}\", \"feedback\": \"{step_eval_report.output}\"}, \"dependsOn\": [\"step_confirm_fix\"]},\n");
-        sb.append("    {\"id\": \"step_final_confirm\", \"type\": \"INTERRUPT\", \"task\": \"确认最终报告\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"报告已优化完成，是否满意？\"}, \"input\": {\"report\": \"{step_draft.output}\"}, \"dependsOn\": [\"step_fix_report\"]}\n");
+        sb.append("    {\"id\": \"step_confirm_fix\", \"type\": \"INTERRUPT\", \"task\": \"确认是否执行修正\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"报告质量尚未达标，是否继续自动修正？\"}, \"input\": {\"evaluation\": \"{step_eval_report.output}\"}, \"dependsOn\": [\"step_eval_report\"]},\n");
+        sb.append("    {\"id\": \"step_fix_report\", \"type\": \"LLM_CALL\", \"model\": \"reasoningModelClient\", \"task\": \"根据评估反馈直接修改报告，输出完整的修改后报告\", \"input\": {\"report\": \"{step_draft.output}\", \"feedback\": \"{step_eval_report.output}\"}, \"dependsOn\": [\"step_confirm_fix\"]},\n");
+        sb.append("    {\"id\": \"step_final_confirm\", \"type\": \"INTERRUPT\", \"task\": \"确认最终报告\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"报告优化流程已结束，请确认是否接受当前结果？\"}, \"input\": {\"report\": \"{step_draft.output}\"}, \"dependsOn\": [\"step_eval_report\"]}\n");
         sb.append("  ],\n");
         sb.append("  \"correctionConfig\": {\n");
         sb.append("    \"loops\": [{\n");
