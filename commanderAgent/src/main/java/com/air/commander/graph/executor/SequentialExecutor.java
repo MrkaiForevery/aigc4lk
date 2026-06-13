@@ -39,8 +39,7 @@ public class SequentialExecutor {
                                                     MemoryContext memoryCtx,
                                                     Map<String, Object> runtimeContext) {
 
-        log.debug("以Sequential模式开始执行任务..... ");
-
+        log.info("以Sequential模式开始执行任务..... ");
          long start= System.currentTimeMillis();
 
         List<Step> orderedSteps = graphBuilder.buildSequentialExecutionOrder(plan);
@@ -69,7 +68,7 @@ public class SequentialExecutor {
             }
         }
         long end = System.currentTimeMillis();
-        log.debug("以Sequential模式执行任务结束，本次耗时:{}ms ",end-start);
+        log.info("以Sequential模式执行任务结束，本次耗时:{}ms ",end-start);
         return results;
     }
 

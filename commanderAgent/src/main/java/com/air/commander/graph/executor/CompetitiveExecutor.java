@@ -48,6 +48,10 @@ public class CompetitiveExecutor {
                                                     Map<String, String> tokens, String xid,
                                                     MemoryContext memoryCtx,
                                                     Map<String, Object> runtimeContext) {
+
+        log.info("以Competitive模式开始执行任务..... ");
+        long start= System.currentTimeMillis();
+
         if (memoryCtx != null && memoryCtx.getUserQuery() != null) {
             runtimeContext.put("userQuery", memoryCtx.getUserQuery());
         }
@@ -207,7 +211,8 @@ public class CompetitiveExecutor {
             }
             i++;
         }
-
+        long end = System.currentTimeMillis();
+        log.info("以Competitive模式执行任务结束，本次耗时:{}ms ",end-start);
 
         return allResults;
     }

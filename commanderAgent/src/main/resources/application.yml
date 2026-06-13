@@ -126,8 +126,7 @@ logging:
     com.alibaba.cloud.nacos.configdata: WARN
     org.springframework.boot.context.config: WARN
     com.alibaba.nacos.client.config.impl.ClientWorker: WARN
-    com.air.platform.common.a2a.router.NacosA2ARouter: DEBUG
-    com.air.commander.graph.DynamicGraphBuilder: DEBUG
+    com.air.commander: DEBUG
 
 springdoc:
   api-docs:

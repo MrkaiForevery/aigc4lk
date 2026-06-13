@@ -39,7 +39,7 @@ public class ConditionalExecutor {
                                                     Map<String, String> tokens, String xid,
                                                     MemoryContext memoryCtx,
                                                     Map<String, Object> runtimeContext) {
-        log.debug("以Conditional模式开始执行任务..... ");
+        log.info("以Conditional模式开始执行任务..... ");
 
         long start= System.currentTimeMillis();
 
@@ -104,7 +104,7 @@ public class ConditionalExecutor {
         }
 
         long end = System.currentTimeMillis();
-        log.debug("以Conditional模式执行任务结束，本次耗时:{}ms ",end-start);
+        log.info("以Conditional模式执行任务结束，本次耗时:{}ms ",end-start);
         return allResults;
     }
 

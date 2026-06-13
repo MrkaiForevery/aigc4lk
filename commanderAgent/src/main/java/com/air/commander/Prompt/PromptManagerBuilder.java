@@ -729,6 +729,8 @@ public class PromptManagerBuilder {
         sb.append("  },\n");
         sb.append("  \"reason\": \"选择该候选的简要理由\"\n");
         sb.append("}");
+        sb.append("⚠️ 注意：你必须直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。\n");
+        sb.append("直接输出 JSON，不要包含任何额外文字、注释或 Markdown 标记。");
 
         return sb.toString();
     }
