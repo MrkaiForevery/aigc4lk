@@ -84,7 +84,7 @@ public class PromptManagerBuilder {
         // 输出格式
         sb.append("请以 JSON 格式返回（不要包含其他内容）：\n");
         sb.append("{ \"predefined\": true/false, \"scenario\": \"场景标识（仅predefined=true时必填）\", \"complexity\": 1-5, \"highRisk\": true/false }");
-
+        sb.append("【重要】请直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。");
         return sb.toString();
     }
 
@@ -152,7 +152,6 @@ public class PromptManagerBuilder {
         sb.append("5. 所有分支步骤（例如 step_fix, step_summary 等）的 dependsOn 必须包含条件步骤的 ID。\n");
         sb.append("6. 步骤列表中只应包含条件步骤之后可能被执行到的分支步骤，不应出现永远不会被引用的步骤。\n\n");
 
-        // ========= 循环纠正 (ITERATIVE_CORRECTION) 规则（完整版） =========
         // ========= 循环纠正 (ITERATIVE_CORRECTION) 规则（评估-纠正模式） =========
         sb.append("【循环纠正 (ITERATIVE_CORRECTION) 规则】\n");
         sb.append("当 executionMode 为 ITERATIVE_CORRECTION 时，必须遵循以下规则：\n");
@@ -254,6 +253,7 @@ public class PromptManagerBuilder {
         sb.append("  - 简单的文本生成或格式转换\n");
         sb.append("  - 用户明确表示\"直接执行\"或\"不需要确认\"\n\n");
         sb.append("如果不需要人工干预，则不要插入 INTERRUPT 步骤。\n\n");
+        sb.append("  - 在循环纠正模式(ITERATIVE_CORRECTION)中，循环结束后的确认检查点应使用中性语气，如“优化流程已结束，请确认是否接受当前结果？”，避免暗示质量已达标。\n");
 
         // ========= 可用的子agent能力清单 =========
         sb.append("=== 可用 Agent 能力清单 ===\n");
@@ -343,7 +343,7 @@ public class PromptManagerBuilder {
         sb.append("- correctionConfig: 当 executionMode 为 ITERATIVE_CORRECTION 时必须，包含以下子字段：\n");
         sb.append("    - loops: 数组，每个元素是一个循环闭环，包含：\n");
         sb.append("        - loopId: 循环的唯一标识（如 \"data_quality_loop\"）。\n");
-        sb.append("        - firstStepId: 循环起始步骤的 ID（该步骤及其后续步骤、直到 evaluatorStepId 之前，构成循环主步骤序列）。\n");
+        sb.append("        - firstStepId: 循环起始步骤的 ID。该步骤只执行一次，生成初始内容，不在循环内重复执行。\n");
         sb.append("        - evaluatorStepId: 评估步骤的 ID（类型为 LLM_CALL，需输出 JSON: {\\\"score\\\": 85, \\\"issues\\\": [...]}）。\n");
         sb.append("        - correctorStepId: 修正步骤的 ID（可选，无修正步骤则省略）。\n");
         sb.append("        - maxIterations: 最大迭代次数（如 3）。\n");
@@ -542,10 +542,10 @@ public class PromptManagerBuilder {
         sb.append("    {\"id\": \"step_collect\", \"type\": \"LLM_CALL\", \"task\": \"从多个权威来源搜集最新市场数据\", \"input\": {\"userQuery\": \"...\"}, \"dependsOn\": []},\n");
         sb.append("    {\"id\": \"step_eval_data\", \"type\": \"LLM_CALL\", \"model\": \"plusModelClient\", \"task\": \"评估数据质量，输出 JSON: {\\\"score\\\": 85, \\\"issues\\\": [...]}\", \"input\": {\"data\": \"{step_collect.output}\"}, \"dependsOn\": [\"step_collect\"]},\n");
         sb.append("    {\"id\": \"step_fix_data\", \"type\": \"LLM_CALL\", \"model\": \"reasoningModelClient\", \"task\": \"根据评估反馈，直接修改数据并输出完整的修改后数据\", \"input\": {\"data\": \"{step_collect.output}\", \"feedback\": \"{step_eval_data.output}\"}, \"dependsOn\": [\"step_eval_data\"]},\n");
-        sb.append("    {\"id\": \"step_data_confirm\", \"type\": \"INTERRUPT\", \"task\": \"数据优化完成，确认是否继续\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"数据优化流程已结束，请确认是否继续生成报告？\"}, \"input\": {\"data\": \"{step_collect.output}\"}, \"dependsOn\": [\"step_eval_data\"]},\n");
+        sb.append("    {\"id\": \"step_data_confirm\", \"type\": \"INTERRUPT\", \"task\": \"数据阶段完成，确认是否继续\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"数据优化流程已结束，请确认是否继续生成报告？\"}, \"input\": {\"data\": \"{step_collect.output}\"}, \"dependsOn\": [\"step_eval_data\"]},\n");
         sb.append("    {\"id\": \"step_draft\", \"type\": \"LLM_CALL\", \"task\": \"基于数据撰写报告初稿\", \"input\": {\"data\": \"{step_collect.output}\", \"userQuery\": \"...\"}, \"dependsOn\": [\"step_data_confirm\"]},\n");
         sb.append("    {\"id\": \"step_eval_report\", \"type\": \"LLM_CALL\", \"model\": \"plusModelClient\", \"task\": \"评估报告质量，输出 JSON: {\\\"score\\\": 85, \\\"issues\\\": [...]}\", \"input\": {\"report\": \"{step_draft.output}\"}, \"dependsOn\": [\"step_draft\"]},\n");
-        sb.append("    {\"id\": \"step_confirm_fix\", \"type\": \"INTERRUPT\", \"task\": \"确认是否执行修正\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"报告质量尚未达标，是否继续自动修正？\"}, \"input\": {\"evaluation\": \"{step_eval_report.output}\"}, \"dependsOn\": [\"step_eval_report\"]},\n");
+        sb.append("    {\"id\": \"step_confirm_fix\", \"type\": \"INTERRUPT\", \"task\": \"确认是否执行修正\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"当前评分未达阈值，是否继续下一轮修正？\"}, \"input\": {\"evaluation\": \"{step_eval_report.output}\"}, \"dependsOn\": [\"step_eval_report\"]},\n");
         sb.append("    {\"id\": \"step_fix_report\", \"type\": \"LLM_CALL\", \"model\": \"reasoningModelClient\", \"task\": \"根据评估反馈直接修改报告，输出完整的修改后报告\", \"input\": {\"report\": \"{step_draft.output}\", \"feedback\": \"{step_eval_report.output}\"}, \"dependsOn\": [\"step_confirm_fix\"]},\n");
         sb.append("    {\"id\": \"step_final_confirm\", \"type\": \"INTERRUPT\", \"task\": \"确认最终报告\", \"checkpoint\": {\"type\": \"CONFIRM\", \"question\": \"报告优化流程已结束，请确认是否接受当前结果？\"}, \"input\": {\"report\": \"{step_draft.output}\"}, \"dependsOn\": [\"step_eval_report\"]}\n");
         sb.append("  ],\n");
@@ -784,11 +784,67 @@ public class PromptManagerBuilder {
 //            memoryCtx.getKnowledgeChunks().forEach(chunk -> sb.append(chunk).append("\n"));
 //            sb.append("\n");
 //        }
-
+        // ========= 4. 强制输出格式约束（兜底） =========
+//        sb.append("【重要】请直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。");
         return sb.toString();
     }
 
+    /**
+     * 构建循环纠正模式中纠正步骤的专用提示词
+     * 清晰展示评估反馈和原始数据，避免双重转义
+     */
+    public String buildCorrectionStepPrompt(Step step, Map<String, Object> context, MemoryContext memoryCtx) throws JsonProcessingException {
+        StringBuilder sb = new StringBuilder();
 
+        // ========= 1. 任务描述（解析占位符） =========
+        String resolvedTask = replacePlaceholders(step.getTask(), context);
+        sb.append("【任务】\n").append(resolvedTask).append("\n\n");
+
+        // ========= 2. 解析输入数据 =========
+        Map<String, Object> resolvedInput = resolveInput(step.getInput(), context);
+
+        // ========= 3. 处理评估反馈 =========
+        Object feedbackObj = resolvedInput.get("feedback");
+        if (feedbackObj instanceof Map) {
+            Map<String, Object> feedbackMap = (Map<String, Object>) feedbackObj;
+            Object contentObj = feedbackMap.get("content");
+            if (contentObj instanceof String) {
+                sb.append("【评估发现的问题】\n");
+                sb.append(formatFeedbackAsPlainText((String) contentObj));
+                sb.append("\n");
+            }
+        } else if (feedbackObj instanceof String) {
+            sb.append("【评估反馈】\n").append(feedbackObj).append("\n\n");
+        }
+
+        // ========= 4. 处理需要修改的原始内容 =========
+        Object dataObj = resolvedInput.get("data");
+        if (dataObj == null) {
+            dataObj = resolvedInput.get("report"); // 兼容不同字段名
+        }
+        if (dataObj instanceof Map) {
+            Map<String, Object> dataMap = (Map<String, Object>) dataObj;
+            Object content = dataMap.get("content");
+            sb.append("【需要修改的原始内容】\n");
+            if (content instanceof String) {
+                // 尝试解析为 JSON 并递归格式化为缩进文本
+                String formatted = tryFormatAsIndentedJson((String) content);
+                sb.append(formatted).append("\n\n");
+            } else {
+                sb.append(content != null ? content.toString() : "").append("\n\n");
+            }
+        } else if (dataObj instanceof String) {
+            // 如果直接就是字符串（非标准结构），也尝试解析
+            sb.append("【需要修改的原始内容】\n");
+            sb.append(tryFormatAsIndentedJson((String) dataObj)).append("\n\n");
+        } else {
+            sb.append("【需要修改的原始内容】\n（无内容）\n\n");
+        }
+
+        // ========= 5. 强制输出格式约束 =========
+        sb.append("【重要】请直接输出修改后的完整内容，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。");
+        return sb.toString();
+    }
     /**
      * 构建竞争模式评审步骤的专用提示词
      */
@@ -848,6 +904,7 @@ public class PromptManagerBuilder {
         sb.append("- reason: 选择该竞争者的简要理由\n");
         sb.append("- score: 综合评分（1-100 的整数）\n");
         sb.append("请严格按照上述字段输出 JSON，不要添加任何额外文字。\n");
+        sb.append("【重要】请直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。");
 
         return sb.toString();
     }
@@ -856,7 +913,7 @@ public class PromptManagerBuilder {
      * 替换字符串中所有 {key} 占位符为上下文中的字符串值
      */
     public String replacePlaceholders(String template, Map<String, Object> runtimeContext) {
-        Pattern pattern = Pattern.compile("\\{([^}]+)\\}");
+        Pattern pattern = Pattern.compile("\\{([\\w.]+)\\}");
         Matcher matcher = pattern.matcher(template);
         StringBuilder sb = new StringBuilder();
         while (matcher.find()) {
@@ -875,6 +932,94 @@ public class PromptManagerBuilder {
         return sb.toString();
     }
 
+
+    /**
+     * 将评估步骤输出的 JSON 字符串解析为可读的问题列表和建议列表。
+     * 输入示例: {"score": 92, "issues": ["问题1"], "suggestions": ["建议1"]}
+     */
+    private String formatFeedbackAsPlainText(String evalJson) {
+        try {
+            Map<String, Object> evalMap = objectMapper.readValue(evalJson, Map.class);
+            StringBuilder sb = new StringBuilder();
+
+            @SuppressWarnings("unchecked")
+            List<String> issues = (List<String>) evalMap.get("issues");
+            if (issues != null && !issues.isEmpty()) {
+                sb.append("发现的问题：\n");
+                for (int i = 0; i < issues.size(); i++) {
+                    sb.append(i + 1).append(". ").append(issues.get(i)).append("\n");
+                }
+                sb.append("\n");
+            }
+
+            @SuppressWarnings("unchecked")
+            List<String> suggestions = (List<String>) evalMap.get("suggestions");
+            if (suggestions != null && !suggestions.isEmpty()) {
+                sb.append("改进建议：\n");
+                for (int i = 0; i < suggestions.size(); i++) {
+                    sb.append(i + 1).append(". ").append(suggestions.get(i)).append("\n");
+                }
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            // 解析失败，原样返回
+            return evalJson;
+        }
+    }
+
+    /**
+     * 尝试将 JSON 字符串递归展开为缩进的键值对文本
+     * 解析失败则原样返回
+     */
+    private String tryFormatAsIndentedJson(String jsonStr) {
+        try {
+            Object parsed = objectMapper.readValue(jsonStr, Object.class);
+            StringBuilder sb = new StringBuilder();
+            if (parsed instanceof Map) {
+                formatMapRecursively((Map<String, Object>) parsed, sb, 0);
+            } else if (parsed instanceof List) {
+                List<?> list = (List<?>) parsed;
+                for (int i = 0; i < list.size(); i++) {
+                    sb.append(i + 1).append(". ").append(list.get(i)).append("\n");
+                }
+            } else {
+                return jsonStr;
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return jsonStr;
+        }
+    }
+
+    /**
+     * 递归格式化 Map，将嵌套的 JSON 展开为缩进的键值对
+     */
+    @SuppressWarnings("unchecked")
+    private void formatMapRecursively(Map<String, Object> map, StringBuilder sb, int depth) {
+        String indent = "  ".repeat(depth);
+        for (Map.Entry<String, Object> entry : map.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof Map) {
+                sb.append(indent).append(key).append(":\n");
+                formatMapRecursively((Map<String, Object>) value, sb, depth + 1);
+            } else if (value instanceof List) {
+                sb.append(indent).append(key).append(":\n");
+                List<?> list = (List<?>) value;
+                for (int i = 0; i < list.size(); i++) {
+                    Object item = list.get(i);
+                    if (item instanceof Map) {
+                        sb.append(indent).append("  ").append(i + 1).append(". \n");
+                        formatMapRecursively((Map<String, Object>) item, sb, depth + 2);
+                    } else {
+                        sb.append(indent).append("  - ").append(item).append("\n");
+                    }
+                }
+            } else {
+                sb.append(indent).append(key).append(": ").append(value).append("\n");
+            }
+        }
+    }
     /**
      * 解析输入参数中的变量引用，例如 {step1.output} -> 上下文中的实际对象
      */

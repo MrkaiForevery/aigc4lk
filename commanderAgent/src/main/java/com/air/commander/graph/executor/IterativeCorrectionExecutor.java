@@ -3,6 +3,7 @@ package com.air.commander.graph.executor;
 import com.air.commander.graph.GraphBuilder;
 import com.air.commander.graph.common.GraphCommonDataProcessor;
 import com.air.commander.model.*;
+import com.air.commander.tools.TextFormatTools;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +43,6 @@ public class IterativeCorrectionExecutor {
                                                             MemoryContext memoryCtx,
                                                             Map<String, Object> runtimeContext) {
         log.info("以IterativeCorrection模式开始执行任务..... ");
-
         long start = System.currentTimeMillis();
 
         if (memoryCtx != null && memoryCtx.getUserQuery() != null) {
@@ -55,75 +55,88 @@ public class IterativeCorrectionExecutor {
             return sequentialExecutor.executeSequential(plan, threadId, userId, tokens, xid, memoryCtx, runtimeContext);
         }
 
-        List<Step> orderedAll = graphBuilder.buildSequentialExecutionOrder(plan);
+        List<Step> orderedAllSteps = graphBuilder.buildSequentialExecutionOrder(plan);
         Map<String, Object> context = new ConcurrentHashMap<>(runtimeContext);
         List<ExecutionResult> allResults = new ArrayList<>();
 
-        int currentStepIndex = 0;
+        int idx = 0;
+        while (idx < orderedAllSteps.size()) {
+            Step currentStep = orderedAllSteps.get(idx);
 
-        // 遍历每个循环闭环
-        for (OrchestrationPlan.CorrectionLoop loop : config.getLoops()) {
-            // 1. 执行当前循环之前的普通步骤
-            List<Step> preLoopSteps = getStepsUpTo(orderedAll, currentStepIndex, loop.getFirstStepId());
-            for (Step step : preLoopSteps) {
-                if (graphCommonDataProcessor.isStepCompleted(step, context)) continue;
-                ExecutionResult r = stepUnitExecutor.executeSingleStep(step, context, threadId, userId, tokens, xid, memoryCtx);
-                allResults.add(r);
-                if (!graphCommonDataProcessor.postProcessStepResult(r, step, context, plan, allResults.size() - 1, xid, userId, threadId)) {
+            // 如果该步骤已经完成（例如中断恢复后），直接跳过
+            if (graphCommonDataProcessor.isStepCompleted(currentStep, context)) {
+                idx++;
+                continue;
+            }
+
+            // 检查当前步骤是否为某个迭代循环的起点
+            OrchestrationPlan.CorrectionLoop loop = findLoopByFirstStepId(config, currentStep.getId());
+
+            if (loop != null) {
+                // ========== 进入迭代纠正循环体 ==========
+                // 1. 执行主步骤（仅一次）
+                Step firstStep = currentStep; // 就是当前步骤
+                if (!graphCommonDataProcessor.isStepCompleted(firstStep, context)) {
+                    ExecutionResult mainResult = stepUnitExecutor.executeSingleStep(
+                            firstStep, context, threadId, userId, tokens, xid, memoryCtx);
+                    allResults.add(mainResult);
+                    if (!graphCommonDataProcessor.postProcessStepResult(mainResult, firstStep, context, plan, allResults.size() - 1, xid, userId, threadId)) {
+                        // 主步骤中断（例如 REQUEST_CONFIRM）
+                        return allResults;
+                    }
+                }
+
+                // 2. 执行评估-纠正循环（内部会多次执行 evaluator 和 corrector）
+                List<ExecutionResult> loopResults = executeSingleLoop(plan, loop, orderedAllSteps, context, threadId, userId, tokens, xid, memoryCtx);
+                allResults.addAll(loopResults);
+
+                // 3. 如果循环过程中本身定义了中断step步骤，那么返回的result里面必然会携带中断执行挂起后返回的结果，外层通过捕获该结果，进行立即中断返回
+                if (loopResults.stream().anyMatch(r -> r.getCommand() != null)) {
                     return allResults;
                 }
-            }
 
-            // 2. 执行主步骤（只执行一次）
-            Step mainStep = graphCommonDataProcessor.findStepById(orderedAll, loop.getFirstStepId());
-            if (mainStep != null && !graphCommonDataProcessor.isStepCompleted(mainStep, context)) {
-                ExecutionResult mainResult = stepUnitExecutor.executeSingleStep(mainStep, context, threadId, userId, tokens, xid, memoryCtx);
-                allResults.add(mainResult);
-                if (!graphCommonDataProcessor.postProcessStepResult(mainResult, mainStep, context, plan, allResults.size() - 1, xid, userId, threadId)) {
-                    return allResults; // 主步骤中断或失败
+                // 4. 将外层指针移动到循环涉及的最后一步之后
+                //    循环涉及的步骤：firstStepId, evaluatorStepId, correctorStepId（若存在）
+                int firstIdx = graphCommonDataProcessor.findStepIndex(orderedAllSteps, loop.getFirstStepId());
+                int evalIdx = graphCommonDataProcessor.findStepIndex(orderedAllSteps, loop.getEvaluatorStepId());
+                int corrIdx = loop.getCorrectorStepId() != null ?
+                        graphCommonDataProcessor.findStepIndex(orderedAllSteps, loop.getCorrectorStepId()) : -1;
+                int maxLoopIdx = Math.max(firstIdx, Math.max(evalIdx, corrIdx));
+                idx = maxLoopIdx + 1;
+
+            } else {
+                // ========== 普通步骤，直接执行 ==========
+                ExecutionResult r = stepUnitExecutor.executeSingleStep(
+                        currentStep, context, threadId, userId, tokens, xid, memoryCtx);
+                allResults.add(r);
+                if (!graphCommonDataProcessor.postProcessStepResult(
+                        r, currentStep, context, plan, allResults.size() - 1, xid, userId, threadId)) {
+                    return allResults; // 中断（可能是 INTERRUPT 步骤产生 REQUEST_CONFIRM）
                 }
-            }
-
-            // 3. 执行单个循环闭环（只包含评估和纠正）
-            List<ExecutionResult> loopResults = executeSingleLoop(plan, loop, orderedAll, context,
-                    threadId, userId, tokens, xid, memoryCtx);
-            allResults.addAll(loopResults);
-
-            // 检查是否在循环中被中断
-            if (loopResults.stream().anyMatch(r -> r.getCommand() != null)) {
-                return allResults;
-            }
-
-            // 4. 将索引移动到评估步骤之后（后续循环需要从纠正步骤后开始，此处简单处理）
-            currentStepIndex = graphCommonDataProcessor.findStepIndex(orderedAll, loop.getEvaluatorStepId()) + 1;
-        }
-
-        // 5. 执行最后一个循环之后的剩余步骤
-        List<Step> postLoopSteps = orderedAll.subList(currentStepIndex, orderedAll.size());
-        for (Step step : postLoopSteps) {
-            if (graphCommonDataProcessor.isStepCompleted(step, context)) continue;
-            ExecutionResult r = stepUnitExecutor.executeSingleStep(step, context, threadId, userId, tokens, xid, memoryCtx);
-            allResults.add(r);
-            if (!graphCommonDataProcessor.postProcessStepResult(r, step, context, plan, allResults.size() - 1, xid, userId, threadId)) {
-                return allResults;
+                idx++;
             }
         }
 
         long end = System.currentTimeMillis();
         log.info("以IterativeCorrection模式执行任务结束，本次耗时:{}ms ", end - start);
-
         return allResults;
     }
 
-    // 获取从 startIndex 到 targetStepId 之间的步骤（不含 targetStepId）
-    private List<Step> getStepsUpTo(List<Step> orderedSteps, int startIndex, String targetStepId) {
-        List<Step> steps = new ArrayList<>();
-        for (int i = startIndex; i < orderedSteps.size(); i++) {
-            if (orderedSteps.get(i).getId().equals(targetStepId)) break;
-            steps.add(orderedSteps.get(i));
+
+    /**
+     * 从 CorrectionConfig 中查找以指定步骤 ID 为起点的循环配置
+     */
+    private OrchestrationPlan.CorrectionLoop findLoopByFirstStepId(OrchestrationPlan.CorrectionConfig config,
+                                                                   String stepId) {
+        if (config == null || config.getLoops() == null) return null;
+        for (OrchestrationPlan.CorrectionLoop loop : config.getLoops()) {
+            if (loop.getFirstStepId().equals(stepId)) {
+                return loop;
+            }
         }
-        return steps;
+        return null;
     }
+
 
     /**
      * 执行单个循环闭环（仅包含评估和纠正，主步骤已在外部执行）
@@ -148,14 +161,18 @@ public class IterativeCorrectionExecutor {
 
             // 执行评估步骤
             if ("EVALUATE".equals(phase)) {
+                // 清除上一次评估的输出，确保每次循环都重新评估
+                context.remove(evaluatorStep.getId() + ".output");
                 if (!graphCommonDataProcessor.isStepCompleted(evaluatorStep, context)) {
                     ExecutionResult evalR = stepUnitExecutor.executeSingleStep(evaluatorStep, context, threadId, userId, tokens, xid, memoryCtx);
                     results.add(evalR);
 
+                    //每次判断检查点前都把IterationState保存到上下文中
+                    if (evalR.getCommand() != null) {
+                        saveIterationState(context, loop.getLoopId(), iteration, "EVALUATE", 0);
+                    }
                     if (!graphCommonDataProcessor.postProcessStepResult(evalR, evaluatorStep, context, plan, results.size() - 1, xid, userId, threadId)) {
-                        if (evalR.getCommand() != null) {
-                            saveIterationState(context, loop.getLoopId(), iteration, "EVALUATE", 0);
-                        }
+                        //循环内部有中断步骤，就中断直接返回
                         return results;
                     }
                 }
@@ -180,14 +197,22 @@ public class IterativeCorrectionExecutor {
 
             // 执行纠正步骤
             if ("CORRECT".equals(phase)) {
+                // 清除上一次纠正的输出，确保每次循环都重新纠正
+                if (correctorStep != null) {
+                    context.remove(correctorStep.getId() + ".output");
+                }
                 if (!graphCommonDataProcessor.isStepCompleted(correctorStep, context)) {
+                    // 标记为纠正步骤
+                    correctorStep.setIterativeCorrectionStepFlag(true);
+
                     ExecutionResult correctR = stepUnitExecutor.executeSingleStep(correctorStep, context, threadId, userId, tokens, xid, memoryCtx);
                     results.add(correctR);
-
+                    //每次判断检查点前都把IterationState保存到上下文中
+                    if (correctR.getCommand() != null) {
+                        saveIterationState(context, loop.getLoopId(), iteration, "CORRECT", 0);
+                    }
                     if (!graphCommonDataProcessor.postProcessStepResult(correctR, correctorStep, context, plan, results.size() - 1, xid, userId, threadId)) {
-                        if (correctR.getCommand() != null) {
-                            saveIterationState(context, loop.getLoopId(), iteration, "CORRECT", 0);
-                        }
+                        //循环内部有中断步骤，就中断直接返回
                         return results;
                     }
 
@@ -197,30 +222,18 @@ public class IterativeCorrectionExecutor {
 
                 iteration++;
                 phase = "EVALUATE"; // 下一轮从评估开始
-                saveIterationState(context, loop.getLoopId(), iteration, phase, 0);
             }
-        }
 
-        // 达到最大迭代次数且需要确认
-        if (iteration >= loop.getMaxIterations() && loop.isCheckpointOnMaxIterations()) {
-            int finalScore = extractQualityScore(evaluatorStep, context);
-            ExecutionResult timeoutResult = ExecutionResult.builder()
-                    .stepId("max_iterations_reached_" + loop.getLoopId())
-                    .success(false)
-                    .command(ExecutionResult.Command.builder()
-                            .type("REQUEST_CONFIRM")
-                            .message(String.format("循环 [%s] 已达到最大迭代次数 %d，当前评分 %d。是否接受当前结果？",
-                                    loop.getLoopId(), loop.getMaxIterations(), finalScore))
-                            .requiredScopes(List.of())
-                            .build())
-                    .output(Map.of("currentScore", finalScore))
-                    .build();
-            results.add(timeoutResult);
+            //每次循环结束后，也把状态保存到上下文中
+            saveIterationState(context, loop.getLoopId(), iteration, phase, 0);
         }
 
         return results;
     }
 
+    /**
+     * 加载循环执行的相位记忆点
+     */
     private IterationState loadIterationState(Map<String, Object> context, String loopId) {
         Object stateObj = context.get("iterationState_" + loopId);
         if (stateObj == null) return null;
@@ -237,6 +250,10 @@ public class IterativeCorrectionExecutor {
         }
     }
 
+    /**
+     * 记录每个循环内部的循环状态，只有内层执行循环时需要用到。
+     * 可以这样理解：外层是“按图索骥”，靠步骤完成标记就能恢复；内层是“原地绕圈”，必须自己记住绕到第几圈、当前朝向哪儿。
+     **/
     private void saveIterationState(Map<String, Object> context, String loopId,
                                     int iteration, String phase, int mainStepIndex) {
         try {
@@ -257,7 +274,8 @@ public class IterativeCorrectionExecutor {
             Object content = ((Map<?, ?>) output).get("content");
             if (content instanceof String) {
                 try {
-                    Map<String, Object> scoreMap = objectMapper.readValue((String) content, Map.class);
+                    String finalContent = TextFormatTools.removeMDHeadTailAnnotation((String) content);
+                    Map<String, Object> scoreMap = objectMapper.readValue(finalContent, Map.class);
                     if (scoreMap.containsKey("score")) {
                         return ((Number) scoreMap.get("score")).intValue();
                     }

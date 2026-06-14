@@ -16,6 +16,6 @@ import java.io.Serializable;
 @AllArgsConstructor
 public class IterationState implements Serializable {
     private int iteration;          // 当前迭代次数
-    private String phase;           // MAIN / EVALUATE / CORRECT
+    private String phase;           //循环的相位位置: EVALUATE(评估阶段step) / CORRECT(修正阶段step)
     private int mainStepIndex;      // 主步骤序列中下一个要执行的步骤索引
 }

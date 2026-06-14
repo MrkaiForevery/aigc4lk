@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -105,7 +104,6 @@ public class BaseNacosA2ARouter {
      * 调用指定的 Agent
      */
     public ExecutionResult callAgent(Step step,
-                                     Map<String, Object> runtimeContext,
                                      Map<String, String> tokens,
                                      String threadId,
                                      String xid,
@@ -121,7 +119,13 @@ public class BaseNacosA2ARouter {
                     .error("[BaseNacosA2ARouter.callAgent]A2A Agent name is empty")
                     .build();
         }
-        TextPart textPart = new TextPart(buildAgentContent(step, runtimeContext));
+        //提取提示词
+        String preBuiltA2AAgentContent = step.getPreBuiltA2AAgentContent();
+        if (ObjectUtil.isEmpty(preBuiltA2AAgentContent)) {
+            throw new RuntimeException("[A2A-error]:step对象中提取提示词prompt失败，提示词不能为空");
+        }
+
+        TextPart textPart = new TextPart(preBuiltA2AAgentContent);
 
         // 构建 A2A 标准消息
         Message userMessage = buildMessage(step, tokens, threadId, xid, memoryCtx, textPart);
@@ -350,56 +354,12 @@ public class BaseNacosA2ARouter {
     /**
      * 构建标准的TextParts入参
      */
-    private String buildAgentContent(Step step, Map<String, Object> runtimeContext) {
-        StringBuilder sb = new StringBuilder();
-
-        // 1. 解析任务描述中的占位符（如 {step1.output}）
-        String resolvedTask = promptManagerBuilder.replacePlaceholders(step.getTask(), runtimeContext);
-        sb.append("【任务】\n").append(resolvedTask).append("\n\n");
-
-        // 2. 输入数据（仅当有显式 input 时）
-        if (step.getInput() != null && !step.getInput().isEmpty()) {
-            //在顺序模式下执行LLM_CALL时，剔除用户的原始请求输入，避免大模型产生幻觉
-            boolean hasBusinessData = step.getInput().entrySet().stream()
-                    .anyMatch(entry -> !"userQuery".equals(entry.getKey()) && entry.getValue() != null);
-
-            if (hasBusinessData) {
-                sb.append("【输入数据】\n");
-                step.getInput().forEach((key, value) -> {
-                    if (!"userQuery".equals(key) && value != null) {
-                        sb.append("--- ").append(key).append(" ---\n");
-                        sb.append(formatValue(value)).append("\n\n");
-                    }
-                });
-            }
+    private String buildAgentContent(Step step) {
+        // 优先使用预构建的文本（纠正步骤或竞争评审步骤）
+        if (step.getPreBuiltA2AAgentContent() != null) {
+            return step.getPreBuiltA2AAgentContent();
+        }else{
+            throw new RuntimeException("[A2A-error]:step对象中提取提示词prompt失败，提示词不能为空");
         }
-        return sb.toString();
     }
-
-    /**
-     * 将任意值格式化为字符串，并进行最终长度控制
-     */
-    private String formatValue(Object value) {
-        if (value == null) return "（无数据）";
-        String str;
-        if (value instanceof String s) {
-            str = s;
-        } else if (value instanceof Map || value instanceof List) {
-            // 复杂对象序列化为 JSON（可引入 objectMapper）
-            try {
-                str = objectMapper.writeValueAsString(value);
-            } catch (JsonProcessingException e) {
-                str = value.toString();
-            }
-        } else {
-            str = value.toString();
-        }
-
-        // 最终上限 5000 字符，防止整个区块过大
-        if (str.length() > 5000) {
-            str = str.substring(0, 5000) + "\n...(内容过长已截断)";
-        }
-        return str;
-    }
-
 }

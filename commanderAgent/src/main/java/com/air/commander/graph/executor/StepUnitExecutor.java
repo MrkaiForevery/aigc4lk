@@ -10,6 +10,9 @@ import com.air.commander.model.Step;
 import com.air.commander.model.StepDataContract;
 import com.air.commander.resilience.ResilienceManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.a2a.spec.Message;
+import io.a2a.spec.TextPart;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
@@ -18,6 +21,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -30,16 +34,20 @@ public class StepUnitExecutor {
     private final ResilienceManager resilience;
     private final DataContractEngine dataContractEngine;
 
+    private final ObjectMapper objectMapper;
+
     public StepUnitExecutor(ChatClientSelector chatClientSelector,
                             BaseNacosA2ARouter a2aRouter,
                             PromptManagerBuilder promptManagerBuilder,
                             ResilienceManager resilience,
-                            DataContractEngine dataContractEngine) {
+                            DataContractEngine dataContractEngine,
+                            ObjectMapper objectMapper) {
         this.chatClientSelector = chatClientSelector;
         this.a2aRouter = a2aRouter;
         this.promptManagerBuilder = promptManagerBuilder;
         this.resilience = resilience;
         this.dataContractEngine = dataContractEngine;
+        this.objectMapper = objectMapper;
     }
 
     public ExecutionResult executeSingleStep(Step step,
@@ -70,8 +78,18 @@ public class StepUnitExecutor {
         };
     }
 
-    private ExecutionResult doA2ADelegateLogic(Step step, Map<String, Object> runtimeContext, String threadId, Map<String, String> tokens, String xid, MemoryContext memoryCtx) {
-        return a2aRouter.callAgent(step, runtimeContext, tokens, threadId, xid, memoryCtx);
+    /**
+     * 执行 A2A 委托调用
+     * 包含循环模式-纠正步骤提示词定制化处理，
+     * 包含竞争模式-评审步骤提示定制化处理
+     * 正常模式也统一处理
+     */
+    private ExecutionResult doA2ADelegateLogic(Step step, Map<String, Object> runtimeContext,
+                                               String threadId, Map<String, String> tokens,
+                                               String xid, MemoryContext memoryCtx) {
+        String prompt = getAppropriatePromptByStepFlag(step, runtimeContext, memoryCtx);
+        step.setPreBuiltA2AAgentContent(prompt);
+        return a2aRouter.callAgent(step, tokens, threadId, xid, memoryCtx);
     }
 
     private ExecutionResult doInterruptLogic(Step step, Map<String, Object> runtimeContext) {
@@ -127,27 +145,16 @@ public class StepUnitExecutor {
     }
 
     private ExecutionResult doLLMCallLogic(Step step, Map<String, Object> runtimeContext, MemoryContext memoryCtx) {
-        // 1. 构建 Prompt：使用 step 中的 task 或 input
-        String prompt = null;
-        // 判断是否为竞争评审步骤：input 中包含竞争组输出（key 以 .output 结尾）
-        try {
-            if (step.isCompetitiveSelectorStepFlag()) {
-                prompt = promptManagerBuilder.buildCompetitionJudgeStepPrompt(step, runtimeContext, memoryCtx);
-            } else {
-                prompt = promptManagerBuilder.buildGraphExecutorLLMStepPrompt(step, runtimeContext, memoryCtx);
-            }
-        } catch (JsonProcessingException e) {
-            log.error("构建LLMCall的prompt提示词失败！！");
-            throw new RuntimeException(e);
-        }
+
+        // 1. 构建 Prompt
+        String prompt = getAppropriatePromptByStepFlag(step,runtimeContext,memoryCtx);
 
         // 2. 调用模型（带弹性保护）
-        String finalPrompt = prompt;
         long startTime = System.currentTimeMillis();
         ChatClient chatClient = chatClientSelector.getClient(step.getModel());
         String llmOutput = resilience.executeWithFullProtection(
                 "llm-step-call",
-                () -> chatClient.prompt(finalPrompt).call().content(),
+                () -> chatClient.prompt(prompt).call().content(),
                 () -> "LLM调用降级，返回默认回复"
         );
 
@@ -181,6 +188,7 @@ public class StepUnitExecutor {
                 .checkpoint(step.getCheckpoint())
                 .dataContract(step.getDataContract())
                 .competitiveSelectorStepFlag(step.isCompetitiveSelectorStepFlag())
+                .iterativeCorrectionStepFlag(step.isIterativeCorrectionStepFlag())
                 .build();
 
         // 自动为条件步骤设置失败策略，避免条件判断失败触发回滚
@@ -201,5 +209,23 @@ public class StepUnitExecutor {
         return step.getType() == Step.StepType.LLM_CALL
                 && step.getInput() != null
                 && step.getInput().containsKey("branches");
+    }
+
+    /**
+     *根据各种step里面预设的标识，判定使用哪种方式构建提示词
+     */
+    private String getAppropriatePromptByStepFlag(Step step, Map<String, Object> runtimeContext, MemoryContext memoryCtx) {
+        try {
+            if (step.isIterativeCorrectionStepFlag()) {
+                return promptManagerBuilder.buildCorrectionStepPrompt(step, runtimeContext, memoryCtx);
+            }
+            if (step.isCompetitiveSelectorStepFlag()) {
+                return promptManagerBuilder.buildCompetitionJudgeStepPrompt(step, runtimeContext, memoryCtx);
+            }
+            return promptManagerBuilder.buildGraphExecutorLLMStepPrompt(step, runtimeContext, memoryCtx);
+        } catch (JsonProcessingException e) {
+            log.error("构建LLMCall的prompt提示词失败！！");
+            throw new RuntimeException(e);
+        }
     }
 }

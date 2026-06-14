@@ -72,9 +72,14 @@ public class Step {
     /** 控制每一步LLM执行时是否需要读取用户历史的会话记忆,默认false不包含对话历史**/
     private boolean includeChatHistory = false;
 
-    /**标记该步骤是否是竞争模式里面得评审步骤**/
+    /**标记该步骤是否是竞争模式里面的评审步骤**/
     private boolean competitiveSelectorStepFlag = false;
 
+    /**标记该步骤是否是循环纠正模式里面的纠正步骤**/
+    private boolean iterativeCorrectionStepFlag = false;
+
+    /**A2A场景使用--承载预处理给A2A-Agent的prompt的内容**/
+    private String preBuiltA2AAgentContent;
 
     @Data
     @Builder
