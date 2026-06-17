@@ -5,6 +5,8 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
+import java.sql.SQLException;
+
 @FeignClient(
         name = "aigc4lk-shared-memory-service",
         contextId = "memoryConversationHistoryFeign",
@@ -13,5 +15,5 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface MemoryConversationHistoryFeign {
 
     @PostMapping("/saveOne")
-    void saveOne(@RequestBody ConversationHistoryDTO conversationHistoryDTO);
+    void saveOne(@RequestBody ConversationHistoryDTO conversationHistoryDTO) throws SQLException;
 }

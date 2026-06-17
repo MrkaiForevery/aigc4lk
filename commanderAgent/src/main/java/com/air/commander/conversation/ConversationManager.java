@@ -14,6 +14,7 @@ import org.redisson.api.RList;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Component;
 
+import java.sql.SQLException;
 import java.util.List;
 
 /**
@@ -51,7 +52,7 @@ public class ConversationManager {
                                         String userInput,
                                         OrchestrationPlan plan,
                                         List<ExecutionResult> results,
-                                        MemoryContext oldCtx) {
+                                        MemoryContext oldCtx) throws SQLException {
 
         //构建存储对象
          ConversationHistoryDTO requestDto = ConversationHistoryDTO.builder()

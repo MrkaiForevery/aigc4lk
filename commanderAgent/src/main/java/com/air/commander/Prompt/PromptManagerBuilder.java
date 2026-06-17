@@ -43,27 +43,37 @@ public class PromptManagerBuilder {
         );
         sb.append("\n");
 
-        // 用户画像
-        if (ctx.getUserProfile() != null && !ctx.getUserProfile().isEmpty()) {
-            sb.append("=== 用户画像 ===\n").append(ctx.getUserProfile()).append("\n\n");
-        }
+        // ========== 新增：场景匹配规则（硬约束） ==========
+        sb.append("【场景匹配规则 - 必须严格遵守】\n");
+        sb.append("- 只有当用户请求的主题、意图和具体要求**完全吻合**上述某个预定义场景的典型范畴时，才可以将 predefined 设为 true。\n");
+        sb.append("- 场景标识本身可能没有直接语义，你需要根据标识的字面含义或常识推断其代表的任务类型。\n");
+        sb.append("- 如果用户请求与所有预定义场景均**没有明确、完整的关联**，即使存在个别关键词重叠，也必须将 predefined 设为 false。\n");
+        sb.append("- **禁止因为场景标识包含某些字母或相似词汇，就强行匹配一个不相关的场景。**\n");
+        sb.append("- 在不确定是否匹配时，**宁可 predefined=false，也绝不强行匹配**。\n\n");
+        // =============================================
 
-        // 用户偏好
-        if (ctx.getPreferences() != null && !ctx.getPreferences().isEmpty()) {
-            sb.append("=== 用户偏好 ===\n").append(ctx.getPreferences()).append("\n\n");
-        }
 
-        // 最近对话（取最近3条）
-        if (ctx.getRecentMessages() != null && !ctx.getRecentMessages().isEmpty()) {
-            String recent = ctx.getRecentMessages().stream()
-                    .filter(msg -> !"done".equals(msg.getContent()))
-                    .skip(Math.max(0, ctx.getRecentMessages().size() - 3))
-                    .map(msg -> "- " + msg.getRole() + ": " + msg.getContent())
-                    .collect(Collectors.joining("\n"));
-            if (!recent.isEmpty()) {
-                sb.append("=== 最近对话 ===\n").append(recent).append("\n\n");
-            }
-        }
+//        // 用户画像
+//        if (ctx.getUserProfile() != null && !ctx.getUserProfile().isEmpty()) {
+//            sb.append("=== 用户画像 ===\n").append(ctx.getUserProfile()).append("\n\n");
+//        }
+//
+//        // 用户偏好
+//        if (ctx.getPreferences() != null && !ctx.getPreferences().isEmpty()) {
+//            sb.append("=== 用户偏好 ===\n").append(ctx.getPreferences()).append("\n\n");
+//        }
+
+//        // 最近对话（取最近3条）
+//        if (ctx.getRecentMessages() != null && !ctx.getRecentMessages().isEmpty()) {
+//            String recent = ctx.getRecentMessages().stream()
+//                    .filter(msg -> !"done".equals(msg.getContent()))
+//                    .skip(Math.max(0, ctx.getRecentMessages().size() - 3))
+//                    .map(msg -> "- " + msg.getRole() + ": " + msg.getContent())
+//                    .collect(Collectors.joining("\n"));
+//            if (!recent.isEmpty()) {
+//                sb.append("=== 最近对话 ===\n").append(recent).append("\n\n");
+//            }
+//        }
 
         // 当前请求
         sb.append("=== 当前用户请求 ===\n").append(userInput).append("\n\n");
@@ -83,8 +93,14 @@ public class PromptManagerBuilder {
 
         // 输出格式
         sb.append("请以 JSON 格式返回（不要包含其他内容）：\n");
-        sb.append("{ \"predefined\": true/false, \"scenario\": \"场景标识（仅predefined=true时必填）\", \"complexity\": 1-5, \"highRisk\": true/false }");
+        sb.append("{ \"predefined\": true/false");
+        // ========== 修改：强调 scenario 字段的条件性 ==========
+        sb.append(", \"scenario\": \"场景标识（仅当 predefined=true 时必填，否则必须省略该字段）\"");
+        // =================================================
+        sb.append(", \"complexity\": 1-5, \"highRisk\": true/false }\n");
         sb.append("【重要】请直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。");
+        sb.append("如果 predefined 为 false，则 JSON 中只能包含 predefined、complexity、highRisk 三个字段。");
+
         return sb.toString();
     }
 

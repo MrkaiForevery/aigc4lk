@@ -1,5 +1,7 @@
 package com.air.memory.service;
 
+import cn.hutool.core.date.DateUnit;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.json.JSONUtil;
 import com.air.api.dto.conversation.ConversationHistoryDTO;
@@ -9,12 +11,17 @@ import com.air.memory.model.ConversationHistory;
 import com.air.memory.model.ExecutionResultHistory;
 import com.air.memory.model.PlanHistory;
 import com.air.memory.repository.structured.StructuredMemoryRepository;
+import com.air.memory.utils.MKJsonUtils;
+import com.alibaba.fastjson2.util.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -28,7 +35,7 @@ public class ConversationHistoryManagerService {
     private final StructuredMemoryRepository structuredMemoryRepository;
 
     @Transactional
-    public void doSaveOneConversationHistory(ConversationHistoryDTO conversationHistoryDTO) {
+    public void doSaveOneConversationHistory(ConversationHistoryDTO conversationHistoryDTO) throws SQLException {
         String userId = conversationHistoryDTO.getUserId();
         String threadId = conversationHistoryDTO.getThreadId();
 
@@ -46,7 +53,7 @@ public class ConversationHistoryManagerService {
         PlanHistory planHistory = transferPlanHistory(conversationHistoryDTO);
         //判断planId是否存在
         Integer existPlanHistoryId = structuredMemoryRepository.existPlanHistory(threadId, planHistory.getPlanId());
-        if (existPlanHistoryId > 0) {
+        if (!ObjectUtil.isEmpty(existPlanHistoryId)) {
             planHistory.setId(existPlanHistoryId);
         }
         //planHistory的主键存在就修改，不存在就插入
@@ -79,11 +86,12 @@ public class ConversationHistoryManagerService {
                 .userId(dto.getUserId())
                 .threadId(dto.getThreadId())
                 .status("IN_PROGRESS")
+                .createdAt(LocalDateTime.now())
                 .build();
     }
 
 
-    private PlanHistory transferPlanHistory(ConversationHistoryDTO dto) {
+    private PlanHistory transferPlanHistory(ConversationHistoryDTO dto) throws SQLException {
         OrchestrationPlanDTO planDTO = dto.getPlanDTO();
         return PlanHistory.builder()
                 .threadId(dto.getThreadId())
@@ -91,9 +99,10 @@ public class ConversationHistoryManagerService {
                 .relationTemplateId(planDTO.getRelationTemplateId())
                 .userInput(dto.getUserInput())
                 .planId(planDTO.getPlanId())
-                .planContentJsonb(JSONUtil.toJsonStr(planDTO))
+                .planContentJsonb(MKJsonUtils.transferToPGJsonB(planDTO))
                 .executeStepId(this.findExecutingStepId(dto))
                 .createdBy("admin111")
+                .createdTime(LocalDateTime.now())
                 .build();
     }
 
@@ -105,17 +114,23 @@ public class ConversationHistoryManagerService {
 
     private List<ExecutionResultHistory> transferExecuteStepsHistory(ConversationHistoryDTO conversationHistoryDTO) {
         List<ExecutionResultDTO> executionResultDTOS = conversationHistoryDTO.getExecutionResultDTOS();
+        String planId = conversationHistoryDTO.getPlanDTO().getPlanId();
         List<ExecutionResultHistory> resultHistories = executionResultDTOS.stream()
                 .map(dto -> {
                     String executeStatus = dto.isSuccess() ? "success" : "error";
-                    return ExecutionResultHistory.builder()
-                            .relationPlanId(dto.getRelationPlanId())
-                            .stepId(dto.getStepId())
-                            .resultContentJsonb(JSONUtil.toJsonStr(dto))
-                            .executeStatus(executeStatus)
-                            .executeTime(dto.getDurationMs())
-                            .createdBy("admin111")
-                            .build();
+                    try {
+                        return ExecutionResultHistory.builder()
+                                .relationPlanId(planId)
+                                .stepId(dto.getStepId())
+                                .resultContentJsonb(MKJsonUtils.transferToPGJsonB(dto))
+                                .executeStatus(executeStatus)
+                                .executeTime(dto.getDurationMs())
+                                .createdBy("admin111")
+                                .createdTime(LocalDateTime.now())
+                                .build();
+                    } catch (SQLException e) {
+                        throw new RuntimeException(e);
+                    }
                 })
                 .collect(Collectors.toList());
         return resultHistories;

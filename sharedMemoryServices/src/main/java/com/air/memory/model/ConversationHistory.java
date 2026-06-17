@@ -8,8 +8,9 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.Date;
 
- /**
+/**
  * conversation_history;会话历史记录表数据表的PO对象
  * @author : mrkai
  * @date : 2026-6-17
@@ -23,7 +24,7 @@ import java.time.LocalDateTime;
 public class ConversationHistory implements Serializable,Cloneable{
     /** 主键id,; */
     @TableId(type = IdType.AUTO)
-    private int id ;
+    private Integer id ;
     /** 会话id,; */
     private String threadId ;
     /** 用户id,; */
@@ -38,6 +39,6 @@ public class ConversationHistory implements Serializable,Cloneable{
     /** 修改人,; */
     private String updateBy ;
     /** 修改时间,; */
-    @TableField(fill = FieldFill.INSERT)
+    @TableField(fill = FieldFill.UPDATE)
     private LocalDateTime updateAt ;
 }

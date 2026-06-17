@@ -91,6 +91,8 @@ resilience4j:
         base-config: default
       llm-step-call:
         base-config: default
+      conversation-history-write:
+        base-config: default
 
   ratelimiter:
     instances:
@@ -117,6 +119,9 @@ resilience4j:
         timeout-duration: 600s
       llm-call:
         timeout-duration: 180s
+      conversation-history-write:
+        timeout-duration: 180s
+
 
 logging:
   level:

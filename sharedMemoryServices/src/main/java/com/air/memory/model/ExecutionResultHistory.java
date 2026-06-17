@@ -5,8 +5,11 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.postgresql.util.PGobject;
 
 import java.io.Serializable;
+import java.sql.Date;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 
  /**
@@ -22,13 +25,13 @@ import java.time.LocalDateTime;
 public class ExecutionResultHistory implements Serializable,Cloneable{
     /** 主键id,; */
     @TableId(type = IdType.AUTO)
-    private int id ;
+    private Integer id ;
     /** 关联的编排计划id,; */
     private String relationPlanId ;
     /** 步骤id,; */
     private String stepId ;
     /** 步骤结果jsonb对象,; */
-    private String resultContentJsonb ;
+    private PGobject resultContentJsonb ;
     /** 执行状态,成功，失败，阻塞,; */
     private String executeStatus ;
     /** 执行耗时,; */
@@ -41,6 +44,18 @@ public class ExecutionResultHistory implements Serializable,Cloneable{
     /** 修改人,; */
     private String updateBy ;
     /** 修改时间,; */
+    @TableField(fill = FieldFill.UPDATE)
     private LocalDateTime updateTime ;
 
+     public void setResultContentJsonbString(String json) throws SQLException {
+         if (this.resultContentJsonb == null) {
+             this.resultContentJsonb = new PGobject();
+         }
+         this.resultContentJsonb.setType("jsonb"); // 或 "json"
+         this.resultContentJsonb.setValue(json);
+     }
+
+     public String getResultContentJsonbString() {
+         return this.resultContentJsonb == null ? null : this.resultContentJsonb.getValue();
+     }
 }

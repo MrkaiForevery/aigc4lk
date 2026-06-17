@@ -49,6 +49,7 @@ mybatis-plus:
   global-config:
     db-config:
       id-type: auto
+  type-handlers-package: com.air.memory.pg
 
 redisson:
   single-server-config:

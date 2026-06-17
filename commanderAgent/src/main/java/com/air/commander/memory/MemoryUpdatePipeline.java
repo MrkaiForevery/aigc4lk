@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -39,7 +40,12 @@ public class MemoryUpdatePipeline {
                     "pg-conversation-history",
                     "conversation-history-write",
                     () -> {
-                        conversationManager.saveConversationHistory(threadId, userId, userInput, plan, results, oldCtx);
+                        try {
+                            conversationManager.saveConversationHistory(threadId, userId, userInput, plan, results, oldCtx);
+                        } catch (SQLException e) {
+                            log.debug("会话消息添加失败: {}", e.getCause());
+                            throw new RuntimeException(e);
+                        }
                         log.debug("会话消息已添加: threadId={}", threadId);
                         return null;
                     },

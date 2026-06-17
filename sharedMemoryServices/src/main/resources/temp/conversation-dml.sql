@@ -6,9 +6,9 @@ CREATE TABLE conversation_history(
                                      user_id VARCHAR NOT NULL,
                                      status VARCHAR NOT NULL,
                                      created_by VARCHAR NOT NULL,
-                                     created_at TIME NOT NULL,
+                                     created_at TIMESTAMP NOT NULL,
                                      update_by VARCHAR,
-                                     update_at TIME,
+                                     update_at TIMESTAMP,
                                      PRIMARY KEY (id)
 );
 COMMENT ON COLUMN conversation_history.id IS '主键id';
@@ -27,27 +27,27 @@ CREATE INDEX index_user_id_thread_id ON conversation_history (
     );
 COMMENT ON INDEX index_user_id_thread_id IS 'index_user_id_thread_id;用户id+会话id 索引';
 
-
-
 DROP TABLE IF EXISTS plan_history;
 CREATE TABLE plan_history(
                              id SERIAL NOT NULL,
                              thread_id VARCHAR NOT NULL,
                              relation_request_id VARCHAR NOT NULL,
                              relation_template_id VARCHAR,
+                             user_input TEXT NOT NULL,
                              plan_id VARCHAR NOT NULL,
-                             plan_content_jsonb JSON NOT NULL,
+                             plan_content_jsonb JSONB NOT NULL,
                              execute_step_id VARCHAR NOT NULL,
                              created_by VARCHAR NOT NULL,
-                             created_time TIME NOT NULL,
+                             created_time TIMESTAMP NOT NULL,
                              update_by VARCHAR,
-                             update_time TIME,
+                             update_time TIMESTAMP,
                              PRIMARY KEY (id)
 );
 COMMENT ON COLUMN plan_history.id IS '主键id';
 COMMENT ON COLUMN plan_history.thread_id IS '会话id';
 COMMENT ON COLUMN plan_history.relation_request_id IS '关联的请求id';
 COMMENT ON COLUMN plan_history.relation_template_id IS '关联的严格场景的模板id';
+COMMENT ON COLUMN plan_history.user_input IS '用户的原始输入';
 COMMENT ON COLUMN plan_history.plan_id IS '编排计划id';
 COMMENT ON COLUMN plan_history.plan_content_jsonb IS '编排计划的jsonb对象';
 COMMENT ON COLUMN plan_history.execute_step_id IS '执行到哪一步的step_id';
@@ -64,27 +64,18 @@ CREATE INDEX index_request_id_plan_id_thread_id ON plan_history (
     );
 COMMENT ON INDEX index_request_id_plan_id_thread_id IS 'index_request_id_plan_id_thread_id;会话id+请i求id+编排计划id';
 
-
-CREATE INDEX index_request_id_plan_id_thread_id ON plan_history (
-                                                                 relation_request_id ,
-                                                                 thread_id ,
-                                                                 plan_id
-    );
-COMMENT ON INDEX index_request_id_plan_id_thread_id IS 'index_request_id_plan_id_thread_id;会话id+请i求id+编排计划id';
-
-
 DROP TABLE IF EXISTS execution_result_history;
 CREATE TABLE execution_result_history(
                                          id SERIAL NOT NULL,
                                          relation_plan_id VARCHAR NOT NULL,
                                          step_id VARCHAR NOT NULL,
-                                         result_content_jsonb JSON NOT NULL,
+                                         result_content_jsonb JSONB NOT NULL,
                                          execute_status VARCHAR NOT NULL,
                                          execute_time INT8 NOT NULL,
                                          created_by VARCHAR NOT NULL,
-                                         created_time TIME NOT NULL,
+                                         created_time TIMESTAMP NOT NULL,
                                          update_by VARCHAR,
-                                         update_time TIME,
+                                         update_time TIMESTAMP,
                                          PRIMARY KEY (id)
 );
 COMMENT ON COLUMN execution_result_history.id IS '主键id';

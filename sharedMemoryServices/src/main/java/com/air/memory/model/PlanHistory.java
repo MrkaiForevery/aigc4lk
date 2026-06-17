@@ -5,8 +5,11 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.postgresql.util.PGobject;
 
 import java.io.Serializable;
+import java.sql.Date;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 
  /**
@@ -22,7 +25,7 @@ import java.time.LocalDateTime;
 public class PlanHistory implements Serializable,Cloneable{
     /** 主键id,; */
     @TableId(type = IdType.AUTO)
-    private int id ;
+    private Integer id ;
     /** 会话id,; */
     private String threadId ;
     /** 关联的请求id,; */
@@ -34,7 +37,7 @@ public class PlanHistory implements Serializable,Cloneable{
     /** 编排计划id,; */
     private String planId ;
     /** 编排计划的jsonb对象,; */
-    private String planContentJsonb ;
+    private PGobject planContentJsonb ;
     /** 执行到哪一步的step_id,; */
     private String executeStepId ;
     /** 创建人,; */
@@ -45,5 +48,20 @@ public class PlanHistory implements Serializable,Cloneable{
     /** 修改人,; */
     private String updateBy ;
     /** 修改时间,; */
+    @TableField(fill = FieldFill.UPDATE)
     private LocalDateTime updateTime ;
+
+     // 方便设置 JSON 字符串的方法
+     public void setPlanContentJsonbString(String json) throws SQLException {
+         if (this.planContentJsonb == null) {
+             this.planContentJsonb = new PGobject();
+         }
+         this.planContentJsonb.setType("jsonb");
+         this.planContentJsonb.setValue(json);
+     }
+
+     // 方便获取 JSON 字符串的方法
+     public String getPlanContentJsonbString() {
+         return this.planContentJsonb == null ? null : this.planContentJsonb.getValue();
+     }
 }

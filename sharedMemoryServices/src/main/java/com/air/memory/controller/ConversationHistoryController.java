@@ -6,6 +6,8 @@ import com.air.memory.service.ConversationHistoryManagerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.sql.SQLException;
+
 @RestController
 @RequestMapping("/memory/conversation/history")
 @RequiredArgsConstructor
@@ -14,7 +16,7 @@ public class ConversationHistoryController implements MemoryConversationHistoryF
     private final ConversationHistoryManagerService conversationHistoryManagerService;
 
     @Override
-    public void saveOne(ConversationHistoryDTO conversationHistoryDTO) {
+    public void saveOne(ConversationHistoryDTO conversationHistoryDTO) throws SQLException {
         conversationHistoryManagerService.doSaveOneConversationHistory(conversationHistoryDTO);
     }
 }
