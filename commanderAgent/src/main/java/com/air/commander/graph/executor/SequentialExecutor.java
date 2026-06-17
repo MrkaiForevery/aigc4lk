@@ -21,7 +21,9 @@ public class SequentialExecutor {
     private final StepUnitExecutor stepUnitExecutor;
     private final GraphCommonDataProcessor graphCommonDataProcessor;
 
-    /**单步骤执行**/
+    /**
+     * 单步骤执行
+     **/
     public SequentialExecutor(GraphBuilder graphBuilder,
                               StepUnitExecutor stepUnitExecutor,
                               GraphCommonDataProcessor graphCommonDataProcessor) {
@@ -32,15 +34,15 @@ public class SequentialExecutor {
 
 
     public List<ExecutionResult> executeSequential(OrchestrationPlan plan,
-                                                    String threadId,
-                                                    String userId,
-                                                    Map<String, String> tokens,
-                                                    String xid,
-                                                    MemoryContext memoryCtx,
-                                                    Map<String, Object> runtimeContext) {
+                                                   String threadId,
+                                                   String userId,
+                                                   Map<String, String> tokens,
+                                                   String xid,
+                                                   MemoryContext memoryCtx,
+                                                   Map<String, Object> runtimeContext) {
 
         log.info("以Sequential模式开始执行任务..... ");
-         long start= System.currentTimeMillis();
+        long start = System.currentTimeMillis();
 
         List<Step> orderedSteps = graphBuilder.buildSequentialExecutionOrder(plan);
 
@@ -68,11 +70,9 @@ public class SequentialExecutor {
             }
         }
         long end = System.currentTimeMillis();
-        log.info("以Sequential模式执行任务结束，本次耗时:{}ms ",end-start);
+        log.info("以Sequential模式执行任务结束，本次耗时:{}ms ", end - start);
         return results;
     }
-
-
 
 
 }

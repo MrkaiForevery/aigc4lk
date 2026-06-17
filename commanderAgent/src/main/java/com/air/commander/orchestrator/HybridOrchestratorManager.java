@@ -43,9 +43,15 @@ public class HybridOrchestratorManager {
 
     @GlobalTransactional(timeoutMills = 1800000)
     public ExecutionPlan execute(ExecuteRequest request) {
+        //请求id-幂等需要
+        String requestId = UUID.randomUUID().toString();
+        //用户id-用户识别
         String userId = request.userId();
+        //threadId-会话隔离
         String threadId = request.threadId();
+        //用户输入问题
         String userInput = request.input();
+        //用户鉴权扩展参数
         Map<String, String> tokens = request.tokens();
 
         // 1. 构建记忆上下文
@@ -65,18 +71,14 @@ public class HybridOrchestratorManager {
             plan.setMode(ExecutionPlan.ModeType.DYNAMIC);
         }
 
+        //设置幂等性requestId
+        plan.setRelationRequestId(requestId);
+
         // 4. 执行编排好的计划
         String xid = RootContext.getXID();
         List<ExecutionResult> results = graphExecutorEngine.execute(plan, threadId, userId, tokens, xid, memoryCtx);
 
-        // 5. 异步质量评估与记忆更新
-        final OrchestrationPlan finalPlan = plan;
-        CompletableFuture.runAsync(() -> {
-            int score = qualityAssessor.evaluate(finalPlan, results);
-            memoryUpdatePipeline.update(threadId, userId, finalPlan, results, score, memoryCtx);
-        });
-
-        // 6. 构建返回结果
+        // 5. 构建返回结果
         ExecutionPlan originalExecutedResult = ExecutionPlan.builder()
                 .mode(plan.getMode())
                 .planId(plan.getPlanId())
@@ -85,6 +87,12 @@ public class HybridOrchestratorManager {
                 .summary("Executed")
                 .xid(xid)
                 .build();
+
+        // 6. 记忆更新--历史记忆存储
+        CompletableFuture.runAsync(() -> {
+            memoryUpdatePipeline.update(threadId, userId, userInput, plan, results, memoryCtx);
+        });
+
 
         return trimResults(originalExecutedResult);
     }

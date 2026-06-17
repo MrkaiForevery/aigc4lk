@@ -8,11 +8,18 @@ import com.air.memory.cleaner.MemoryCleanerOrchestrator;
 import com.air.memory.deduplicator.MemoryDeduplicator;
 import com.air.memory.entity.*;
 import com.air.memory.mapper.*;
+import com.air.memory.mapper.conversation.ConversationHistoryMapper;
+import com.air.memory.mapper.conversation.ExecutionResultHistoryMapper;
+import com.air.memory.mapper.conversation.PlanHistoryMapper;
+import com.air.memory.model.ConversationHistory;
+import com.air.memory.model.ExecutionResultHistory;
+import com.air.memory.model.PlanHistory;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.ibatis.annotations.Param;
 import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Field;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +33,11 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class StructuredMemoryRepository {
+
+
+    private final ConversationHistoryMapper conversationHistoryMapper;
+    private final PlanHistoryMapper planHistoryMapper;
+    private final ExecutionResultHistoryMapper executionResultHistoryMapper;
 
     private final IdentityMemoryMapper identityMapper;
     private final ProfileMemoryMapper profileMapper;
@@ -43,6 +55,46 @@ public class StructuredMemoryRepository {
      * 记忆去重工具类
      */
     private final MemoryDeduplicator memoryDeduplicator;
+
+    // ==================== 对话记忆存储 ====================
+
+    public boolean existConversationByUserIdAndThreadId(String userId, String threadId) {
+        LambdaQueryWrapper<ConversationHistory> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationHistory::getUserId, userId)
+                .eq(ConversationHistory::getThreadId, threadId);
+        return conversationHistoryMapper.selectCount(queryWrapper) > 0;
+    }
+
+    public void saveOneConversationHistory(ConversationHistory conversationHistory) {
+        conversationHistoryMapper.insert(conversationHistory);
+    }
+
+
+    public Integer existPlanHistory(String threadId, String planId) {
+        LambdaQueryWrapper<PlanHistory> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(PlanHistory::getThreadId, planId)
+                .eq(PlanHistory::getPlanId, threadId)
+                .select(PlanHistory::getId);
+        PlanHistory planHistory = planHistoryMapper.selectOne(queryWrapper);
+        return planHistory != null ? planHistory.getId() : null;
+    }
+
+    public void updatePlanHistory(PlanHistory planHistory) {
+        planHistoryMapper.insertOrUpdate(planHistory);
+    }
+
+
+    public List<ExecutionResultHistory> existedExecutionResultHistoryByPlanId(String planId) {
+        LambdaQueryWrapper<ExecutionResultHistory> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ExecutionResultHistory::getRelationPlanId, planId)
+                .select(ExecutionResultHistory::getId)
+                .select(ExecutionResultHistory::getStepId);
+        return executionResultHistoryMapper.selectList(queryWrapper);
+    }
+
+    public void batchUpdateExecutionResultHistory(List<ExecutionResultHistory> executionResultHistories) {
+        executionResultHistoryMapper.insertOrUpdate(executionResultHistories);
+    }
 
 
     // ==================== 身份记忆 ====================
@@ -131,4 +183,5 @@ public class StructuredMemoryRepository {
     public List<Map<String, Object>> getDecisionAnalysis() {
         return decisionMapper.countByScenario();
     }
+
 }

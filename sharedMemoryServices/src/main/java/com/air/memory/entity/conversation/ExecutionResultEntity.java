@@ -1,4 +1,4 @@
-package com.air.commander.model;
+package com.air.memory.entity.conversation;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +15,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ExecutionResult {
+public class ExecutionResultEntity {
     private String relationPlanId;
     private String stepId;
     private boolean success;

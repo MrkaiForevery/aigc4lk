@@ -1,4 +1,4 @@
-package com.air.commander.model;
+package com.air.api.dto.conversation;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +16,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Step {
+public class StepDTO {
 
     /**改步骤关联的唯一planId**/
     private String relationPlanId;
@@ -69,9 +69,6 @@ public class Step {
     // ========== 条件执行模式（新增） ==========
     /**条件执行模式的条件判断参数配置**/
     private ConditionConfig conditionConfig;
-
-    /** 数据契约，定义输入输出规范**/
-    private StepDataContract dataContract;
 
     /** 控制每一步LLM执行时是否需要读取用户历史的会话记忆,默认false不包含对话历史**/
     private boolean includeChatHistory = false;

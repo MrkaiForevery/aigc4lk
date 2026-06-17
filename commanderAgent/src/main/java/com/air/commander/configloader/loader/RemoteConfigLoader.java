@@ -19,7 +19,6 @@ public class RemoteConfigLoader {
     private final ChromaDbClientProperties chromaDbClientProperties;
     private final GraphTemplatesProperties graphProperties;
     private final IntentRulesProperties intentProperties;
-    private final LoggingProperties loggingProperties;
 
     /**
      * 获取对应连接llm-chatModel的apiKey
@@ -38,17 +37,6 @@ public class RemoteConfigLoader {
 
     public List<GraphTemplatesProperties.TemplateItem> getGraphTemplates() {
         return graphProperties.getTemplates();
-    }
-
-    /**
-     * 获取严格场景模式下所有执行编排模板（键为 templateId）
-     */
-    public Map<String, OrchestrationPlan> getTemplates() {
-        return graphProperties.getTemplates().stream()
-                .collect(Collectors.toMap(
-                        GraphTemplatesProperties.TemplateItem::getTemplateId,
-                        graphProperties::toPlan
-                ));
     }
 
     /**
@@ -81,13 +69,6 @@ public class RemoteConfigLoader {
         public boolean matches(String input) {
             return keywords != null && keywords.stream().anyMatch(input::contains);
         }
-    }
-
-    /**
-     * 获取对应日志配置参数
-     */
-    public LoggingProperties getLoggingProperties(String key){
-        return this.loggingProperties;
     }
 
 }

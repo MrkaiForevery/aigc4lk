@@ -60,14 +60,16 @@ public class CompetitionOrchestratorEngine {
      * 降级兜底计划
      */
     private OrchestrationPlan buildFallbackPlan(String userInput) {
+         String fallBackPlanId = "fallback-" + UUID.randomUUID().toString().substring(0, 8);
         Step step = Step.builder()
+                .relationPlanId(fallBackPlanId)
                 .id("step1")
                 .type(Step.StepType.LLM_CALL)
                 .task("直接回答用户问题")
                 .input(Map.of("userQuery", userInput))
                 .build();
         return OrchestrationPlan.builder()
-                .planId("fallback-" + UUID.randomUUID().toString().substring(0, 8))
+                .planId(fallBackPlanId)
                 .executionMode(OrchestrationPlan.ExecutionMode.SEQUENTIAL)
                 .steps(List.of(step))
                 .build();

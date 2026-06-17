@@ -1,4 +1,4 @@
-package com.air.commander.model;
+package com.air.api.dto.conversation;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +15,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ExecutionResult {
+public class ExecutionResultDTO {
     private String relationPlanId;
     private String stepId;
     private boolean success;

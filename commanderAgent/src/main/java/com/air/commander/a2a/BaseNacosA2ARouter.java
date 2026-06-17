@@ -114,6 +114,7 @@ public class BaseNacosA2ARouter {
         String agentName = step.getAgent();
         if (agentName == null || agentName.isBlank()) {
             return ExecutionResult.builder()
+                    .relationPlanId(step.getRelationPlanId())
                     .stepId(step.getId())
                     .success(false)
                     .error("[BaseNacosA2ARouter.callAgent]A2A Agent name is empty")
@@ -149,7 +150,7 @@ public class BaseNacosA2ARouter {
         }
 
         // 带弹性保护的调用
-         ExecutionResult executionResult = resilience.executeWithFullProtection(
+        ExecutionResult executionResult = resilience.executeWithFullProtection(
                 A2A_CALL,
                 () -> {
                     try {
@@ -174,7 +175,7 @@ public class BaseNacosA2ARouter {
                                     }
                                 });
                         // 解析响应体（可能是 SSE 流或纯 JSON）
-                        return parseSseResponse(response, step.getId(), agentName);
+                        return parseSseResponse(response, step.getRelationPlanId(), step.getId(), agentName);
                     } catch (Exception e) {
                         log.error("A2A调用失败: agent={}, endpoint={}", agentName, endpoint, e);
                         throw new RuntimeException("A2A请求失败", e);
@@ -183,6 +184,7 @@ public class BaseNacosA2ARouter {
                 () -> {
                     log.warn("A2A调用降级: agent={}, stepId={}", agentName, step.getId());
                     return ExecutionResult.builder()
+                            .relationPlanId(step.getRelationPlanId())
                             .stepId(step.getId())
                             .success(false)
                             .output(Map.of("content", "Agent 调用暂时不可用，已跳过此步骤"))
@@ -192,7 +194,7 @@ public class BaseNacosA2ARouter {
         );
 
         long end = System.currentTimeMillis();
-        log.debug("远程调用agent:{}结束，本次耗时:{}ms ",agentName,end-start);
+        log.debug("远程调用agent:{}结束，本次耗时:{}ms ", agentName, end - start);
 
         return executionResult;
     }
@@ -245,25 +247,34 @@ public class BaseNacosA2ARouter {
     /**
      * 解析 JSON-RPC 响应体（兼容 SSE 流和纯 JSON）
      */
-    private ExecutionResult parseSseResponse(String responseBody, String stepId, String agentName) {
+    private ExecutionResult parseSseResponse(String responseBody, String planId, String stepId, String agentName) {
         try {
             // 快速判断响应类型
             if (responseBody == null || responseBody.isEmpty()) {
                 return ExecutionResult.builder()
-                        .stepId(stepId).success(false).error("Empty response body").build();
+                        .relationPlanId(planId)
+                        .stepId(stepId)
+                        .success(false)
+                        .error("Empty response body")
+                        .build();
             }
             if (!responseBody.contains("data:") && !responseBody.trim().startsWith("{")) {
                 return ExecutionResult.builder()
-                        .stepId(stepId).success(false).error("Unexpected response format").build();
+                        .relationPlanId(planId)
+                        .stepId(stepId)
+                        .success(false)
+                        .error("Unexpected response format")
+                        .build();
             }
 
             // 如果包含 "data:"，从后往前查找最后一条 artifact-update
             if (responseBody.contains("data:")) {
                 String lastArtifactJson = findLastArtifact(responseBody);
                 if (lastArtifactJson != null) {
-                    return parseArtifactResult(lastArtifactJson, stepId);
+                    return parseArtifactResult(lastArtifactJson,planId, stepId);
                 } else {
                     return ExecutionResult.builder()
+                            .relationPlanId(planId)
                             .stepId(stepId).success(false)
                             .error("No artifact-update found in SSE response")
                             .build();
@@ -276,16 +287,22 @@ public class BaseNacosA2ARouter {
                     log.warn("JSON-RPC error from agent {}: code={}, message={}",
                             agentName, error.get("code"), error.get("message"));
                     return ExecutionResult.builder()
+                            .relationPlanId(planId)
                             .stepId(stepId).success(false)
                             .error("Agent JSON-RPC error: " + error.get("message"))
                             .build();
                 }
                 return ExecutionResult.builder()
-                        .stepId(stepId).success(false).error("Unexpected JSON response").build();
+                        .relationPlanId(planId)
+                        .stepId(stepId)
+                        .success(false)
+                        .error("Unexpected JSON response")
+                        .build();
             }
         } catch (Exception e) {
             log.error("解析 SSE 响应失败: agent={}", agentName, e);
             return ExecutionResult.builder()
+                    .relationPlanId(planId)
                     .stepId(stepId).success(false)
                     .error("Failed to parse response: " + e.getMessage())
                     .build();
@@ -325,7 +342,7 @@ public class BaseNacosA2ARouter {
     /**
      * 解析 artifact JSON，提取文本内容
      */
-    private ExecutionResult parseArtifactResult(String json, String stepId) {
+    private ExecutionResult parseArtifactResult(String json,String planId, String stepId) {
         try {
             Map<String, Object> rpcResponse = objectMapper.readValue(json, Map.class);
             Map<String, Object> result = (Map<String, Object>) rpcResponse.get("result");
@@ -339,27 +356,17 @@ public class BaseNacosA2ARouter {
                 }
             }
             return ExecutionResult.builder()
+                    .relationPlanId(planId)
                     .stepId(stepId).success(true)
                     .output(Map.of("content", text))
                     .build();
         } catch (Exception e) {
             log.error("解析 artifact 失败", e);
             return ExecutionResult.builder()
+                    .relationPlanId(planId)
                     .stepId(stepId).success(false)
                     .error("Failed to parse artifact: " + e.getMessage())
                     .build();
-        }
-    }
-
-    /**
-     * 构建标准的TextParts入参
-     */
-    private String buildAgentContent(Step step) {
-        // 优先使用预构建的文本（纠正步骤或竞争评审步骤）
-        if (step.getPreBuiltA2AAgentContent() != null) {
-            return step.getPreBuiltA2AAgentContent();
-        }else{
-            throw new RuntimeException("[A2A-error]:step对象中提取提示词prompt失败，提示词不能为空");
         }
     }
 }

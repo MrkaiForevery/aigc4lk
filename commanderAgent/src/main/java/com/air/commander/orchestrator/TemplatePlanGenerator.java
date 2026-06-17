@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -37,8 +38,10 @@ public class TemplatePlanGenerator {
      * 将配置项转换为编排计划模型(这里只针对template这种严格场景下的执行计划匹配)
      */
     private OrchestrationPlan toPlan(GraphTemplatesProperties.TemplateItem item) {
+        String uuidPlanId = UUID.randomUUID().toString();
         List<Step> steps = item.getSteps().stream().map(s -> {
             Step.StepBuilder stepBuilder = Step.builder()
+                    .relationPlanId(uuidPlanId)
                     .id(s.getId())
                     .type(Step.StepType.valueOf(s.getType()))
                     .agent(s.getAgent())
@@ -77,7 +80,8 @@ public class TemplatePlanGenerator {
 
         //todo 这里以后看看还有啥子问题
         return OrchestrationPlan.builder()
-                .planId(item.getTemplateId())
+                .relationTemplateId(item.getTemplateId())
+                .planId(uuidPlanId)
                 .executionMode(OrchestrationPlan.ExecutionMode.valueOf(item.getExecutionMode())) // 可扩展
                 .steps(steps)
                 .rollback(rollbackConfig)

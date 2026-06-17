@@ -1,5 +1,6 @@
-package com.air.commander.model;
+package com.air.api.dto.conversation;
 
+import com.air.api.dto.enums.ModeType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +17,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class OrchestrationPlan {
+public class OrchestrationPlanDTO {
 
     //编排计划关联的唯一requestId
     private String relationRequestId;
@@ -28,13 +29,13 @@ public class OrchestrationPlan {
     private String planId;
 
     //意图识别走的模式 是 "template" 或 "dynamic"
-    private ExecutionPlan.ModeType mode;
+    private ModeType mode;
 
     //定义整个计划的执行策略（顺序、并行、条件分支等）。GraphExecutor 根据它选择不同的执行器。
     private ExecutionMode executionMode;
 
     //任务的原子步骤列表。每个步骤包含类型（A2A/LLM/中断）、依赖关系、输入输出等。这是编排的最小执行单元。
-    private List<Step> steps;
+    private List<StepDTO> steps;
 
     //多循环校验纠正模式的参数。当 executionMode = ITERATIVE_CORRECTION 时必填。
     private CorrectionConfig correctionConfig;

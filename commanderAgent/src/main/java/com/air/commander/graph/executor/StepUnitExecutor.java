@@ -137,6 +137,7 @@ public class StepUnitExecutor {
 
         // 3. 返回结果
         return ExecutionResult.builder()
+                .relationPlanId(step.getRelationPlanId())
                 .stepId(step.getId())
                 .success(false)
                 .command(commandBuilder.build())
@@ -162,6 +163,7 @@ public class StepUnitExecutor {
 
         // 3. 返回结果
         return ExecutionResult.builder()
+                .relationPlanId(step.getRelationPlanId())
                 .stepId(step.getId())
                 .success(true)
                 .output(Map.of("content", llmOutput))
@@ -177,6 +179,7 @@ public class StepUnitExecutor {
         Map<String, Object> stepInput = dataContractEngine.buildInput(step, runtimeContext);
         // 将构建好的输入注入到 step 中（覆盖原有 input）
         Step enrichedStep = Step.builder()
+                .relationPlanId(step.getRelationPlanId())
                 .id(step.getId())
                 .type(step.getType())
                 .model(step.getModel())

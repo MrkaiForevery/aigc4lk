@@ -82,6 +82,7 @@ public class DynamicOrchestrator {
         );
         try {
             Map<String, Object> planMap = objectMapper.readValue(llmOutput, Map.class);
+            //设置随机的planId
             planMap.put("planId",UUID.randomUUID().toString());
             OrchestrationPlan plan = objectMapper.convertValue(planMap, OrchestrationPlan.class);
             return plan;
