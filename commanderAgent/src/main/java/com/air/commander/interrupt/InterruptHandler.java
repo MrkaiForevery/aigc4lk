@@ -58,6 +58,7 @@ public class InterruptHandler {
             }
             // 显式标记中断步骤，用于恢复时识别自身
             runtimeContext.put(stepId + ".interrupted", true);
+            runtimeContext.put(stepId + ".executionStatus", ExecutionResult.ExecutionStatus.SUSPEND);
 
             // 2. 构建检查点上下文
             InterruptContext ctx = InterruptContext.builder()

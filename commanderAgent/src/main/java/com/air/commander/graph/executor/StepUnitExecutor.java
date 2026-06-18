@@ -139,7 +139,8 @@ public class StepUnitExecutor {
         return ExecutionResult.builder()
                 .relationPlanId(step.getRelationPlanId())
                 .stepId(step.getId())
-                .success(false)
+                .success(true)
+                .executionStatus(ExecutionResult.ExecutionStatus.SUSPEND) //设置返回的结果状态为阻塞等待触发
                 .command(commandBuilder.build())
                 .output(previewOutput)
                 .build();
@@ -166,6 +167,7 @@ public class StepUnitExecutor {
                 .relationPlanId(step.getRelationPlanId())
                 .stepId(step.getId())
                 .success(true)
+                .executionStatus(ExecutionResult.ExecutionStatus.DONE)
                 .output(Map.of("content", llmOutput))
                 .durationMs(endTime - startTime)
                 .build();

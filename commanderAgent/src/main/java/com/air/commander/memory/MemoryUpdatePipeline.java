@@ -46,7 +46,7 @@ public class MemoryUpdatePipeline {
                             log.debug("会话消息添加失败: {}", e.getCause());
                             throw new RuntimeException(e);
                         }
-                        log.debug("会话消息已添加: threadId={}", threadId);
+                        log.debug("会话消息已持久化: userId ={},threadId={}，requestId={}", userId, threadId, plan.getRelationRequestId());
                         return null;
                     },
                     () -> {

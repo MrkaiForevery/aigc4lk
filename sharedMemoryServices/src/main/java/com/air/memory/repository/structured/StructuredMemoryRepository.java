@@ -57,7 +57,6 @@ public class StructuredMemoryRepository {
     private final MemoryDeduplicator memoryDeduplicator;
 
     // ==================== 对话记忆存储 ====================
-
     public boolean existConversationByUserIdAndThreadId(String userId, String threadId) {
         LambdaQueryWrapper<ConversationHistory> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ConversationHistory::getUserId, userId)
@@ -95,6 +94,8 @@ public class StructuredMemoryRepository {
     public void batchUpdateExecutionResultHistory(List<ExecutionResultHistory> executionResultHistories) {
         executionResultHistoryMapper.insertOrUpdate(executionResultHistories);
     }
+
+    // ==================== 对话记忆提取 ====================
 
 
     // ==================== 身份记忆 ====================

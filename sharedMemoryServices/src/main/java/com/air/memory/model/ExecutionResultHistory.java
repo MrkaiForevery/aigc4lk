@@ -32,7 +32,7 @@ public class ExecutionResultHistory implements Serializable,Cloneable{
     private String stepId ;
     /** 步骤结果jsonb对象,; */
     private PGobject resultContentJsonb ;
-    /** 执行状态,成功，失败，阻塞,; */
+    /** 执行状态,完成，失败，阻塞,; */
     private String executeStatus ;
     /** 执行耗时,; */
     private long executeTime ;

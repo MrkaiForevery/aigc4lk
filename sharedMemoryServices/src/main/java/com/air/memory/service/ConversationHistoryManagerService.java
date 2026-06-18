@@ -1,9 +1,6 @@
 package com.air.memory.service;
 
-import cn.hutool.core.date.DateUnit;
-import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.ObjectUtil;
-import cn.hutool.json.JSONUtil;
 import com.air.api.dto.conversation.ConversationHistoryDTO;
 import com.air.api.dto.conversation.ExecutionResultDTO;
 import com.air.api.dto.conversation.OrchestrationPlanDTO;
@@ -12,7 +9,6 @@ import com.air.memory.model.ExecutionResultHistory;
 import com.air.memory.model.PlanHistory;
 import com.air.memory.repository.structured.StructuredMemoryRepository;
 import com.air.memory.utils.MKJsonUtils;
-import com.alibaba.fastjson2.util.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,8 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -123,7 +117,7 @@ public class ConversationHistoryManagerService {
                                 .relationPlanId(planId)
                                 .stepId(dto.getStepId())
                                 .resultContentJsonb(MKJsonUtils.transferToPGJsonB(dto))
-                                .executeStatus(executeStatus)
+                                .executeStatus(dto.getExecutionStatus().toString())
                                 .executeTime(dto.getDurationMs())
                                 .createdBy("admin111")
                                 .createdTime(LocalDateTime.now())
@@ -135,5 +129,8 @@ public class ConversationHistoryManagerService {
                 .collect(Collectors.toList());
         return resultHistories;
     }
+
+
+
 
 }

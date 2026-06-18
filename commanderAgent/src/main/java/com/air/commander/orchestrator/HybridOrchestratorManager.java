@@ -218,6 +218,7 @@ public class HybridOrchestratorManager {
                 allResults.add(ExecutionResult.builder()
                         .stepId(step.getId())
                         .success(true)
+                        .executionStatus(ExecutionResult.ExecutionStatus.DONE)
                         .output(runtimeContext.get(outputKey) instanceof Map ?
                                 (Map<String, Object>) runtimeContext.get(outputKey) : null)
                         .build());
@@ -226,7 +227,8 @@ public class HybridOrchestratorManager {
                 if (step.getId().equals(ctx.getCurrentStepId())) {
                     allResults.add(ExecutionResult.builder()
                             .stepId(step.getId())
-                            .success(false)
+                            .success(true)
+                            .executionStatus(ExecutionResult.ExecutionStatus.DONE)
                             .command(ExecutionResult.Command.builder()
                                     .type(ctx.getCommandType())
                                     .message(ctx.getQuestion())
@@ -235,7 +237,7 @@ public class HybridOrchestratorManager {
                             .build());
                 }
             }
-            // 其他未完成的步骤不加入结果，等恢复后由 newResults 补充
+            // 其他未完成的步骤的结果由 newResults 补充
         }
 
         allResults.addAll(newResults);
@@ -276,6 +278,7 @@ public class HybridOrchestratorManager {
                     return ExecutionResult.builder()
                             .stepId(result.getStepId())
                             .success(result.isSuccess())
+                            .executionStatus(result.getExecutionStatus())
                             .output(Map.of("summary", "Step completed")) // 或直接 .output(null)
                             .durationMs(result.getDurationMs())
                             .error(result.getError())  // 如果有错误，保留错误信息

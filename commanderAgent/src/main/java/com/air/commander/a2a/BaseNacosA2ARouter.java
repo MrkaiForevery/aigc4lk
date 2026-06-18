@@ -117,6 +117,7 @@ public class BaseNacosA2ARouter {
                     .relationPlanId(step.getRelationPlanId())
                     .stepId(step.getId())
                     .success(false)
+                    .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                     .error("[BaseNacosA2ARouter.callAgent]A2A Agent name is empty")
                     .build();
         }
@@ -137,6 +138,7 @@ public class BaseNacosA2ARouter {
             return ExecutionResult.builder()
                     .stepId(step.getId())
                     .success(false)
+                    .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                     .error("Agent not found in A2A registry: " + agentName)
                     .build();
         }
@@ -145,6 +147,7 @@ public class BaseNacosA2ARouter {
             return ExecutionResult.builder()
                     .stepId(step.getId())
                     .success(false)
+                    .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                     .error("Agent not found in A2A registry: " + agentName)
                     .build();
         }
@@ -187,6 +190,7 @@ public class BaseNacosA2ARouter {
                             .relationPlanId(step.getRelationPlanId())
                             .stepId(step.getId())
                             .success(false)
+                            .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                             .output(Map.of("content", "Agent 调用暂时不可用，已跳过此步骤"))
                             .error("A2A Agent调用降级")
                             .build();
@@ -255,6 +259,7 @@ public class BaseNacosA2ARouter {
                         .relationPlanId(planId)
                         .stepId(stepId)
                         .success(false)
+                        .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                         .error("Empty response body")
                         .build();
             }
@@ -263,6 +268,7 @@ public class BaseNacosA2ARouter {
                         .relationPlanId(planId)
                         .stepId(stepId)
                         .success(false)
+                        .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                         .error("Unexpected response format")
                         .build();
             }
@@ -275,7 +281,9 @@ public class BaseNacosA2ARouter {
                 } else {
                     return ExecutionResult.builder()
                             .relationPlanId(planId)
-                            .stepId(stepId).success(false)
+                            .stepId(stepId)
+                            .success(false)
+                            .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                             .error("No artifact-update found in SSE response")
                             .build();
                 }
@@ -288,7 +296,9 @@ public class BaseNacosA2ARouter {
                             agentName, error.get("code"), error.get("message"));
                     return ExecutionResult.builder()
                             .relationPlanId(planId)
-                            .stepId(stepId).success(false)
+                            .stepId(stepId)
+                            .success(false)
+                            .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                             .error("Agent JSON-RPC error: " + error.get("message"))
                             .build();
                 }
@@ -296,6 +306,7 @@ public class BaseNacosA2ARouter {
                         .relationPlanId(planId)
                         .stepId(stepId)
                         .success(false)
+                        .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                         .error("Unexpected JSON response")
                         .build();
             }
@@ -303,7 +314,9 @@ public class BaseNacosA2ARouter {
             log.error("解析 SSE 响应失败: agent={}", agentName, e);
             return ExecutionResult.builder()
                     .relationPlanId(planId)
-                    .stepId(stepId).success(false)
+                    .stepId(stepId)
+                    .success(false)
+                    .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                     .error("Failed to parse response: " + e.getMessage())
                     .build();
         }
@@ -357,7 +370,9 @@ public class BaseNacosA2ARouter {
             }
             return ExecutionResult.builder()
                     .relationPlanId(planId)
-                    .stepId(stepId).success(true)
+                    .stepId(stepId)
+                    .success(true)
+                    .executionStatus(ExecutionResult.ExecutionStatus.DONE)
                     .output(Map.of("content", text))
                     .build();
         } catch (Exception e) {
@@ -365,6 +380,7 @@ public class BaseNacosA2ARouter {
             return ExecutionResult.builder()
                     .relationPlanId(planId)
                     .stepId(stepId).success(false)
+                    .executionStatus(ExecutionResult.ExecutionStatus.FAILURE)
                     .error("Failed to parse artifact: " + e.getMessage())
                     .build();
         }

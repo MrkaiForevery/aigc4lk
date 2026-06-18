@@ -19,6 +19,7 @@ public class ExecutionResultDTO {
     private String relationPlanId;
     private String stepId;
     private boolean success;
+    private ExecutionStatus executionStatus;
     private Map<String, Object> output;
     private String error;
     private Command command;
@@ -33,5 +34,9 @@ public class ExecutionResultDTO {
         private String scope;
         private String message;
         private List<String> requiredScopes;
+    }
+
+    public enum ExecutionStatus{
+        SUSPEND,DONE,FAILURE,
     }
 }
