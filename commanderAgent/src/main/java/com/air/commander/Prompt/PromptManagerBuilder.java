@@ -1,6 +1,7 @@
 package com.air.commander.Prompt;
 
 import com.air.commander.chat.ChatClientSelector;
+import com.air.commander.chat.SupportChatModeType;
 import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.air.commander.model.MemoryContext;
 import com.air.commander.model.Step;
@@ -294,7 +295,11 @@ public class PromptManagerBuilder {
         // ========= 新增：可用大模型列表 =========
         sb.append("=== 可用大模型列表 ===\n");
         sb.append("当 type 为 LLM_CALL 时，必须指定 model 字段，值必须从以下模型中选择（不指定则使用默认模型）：\n");
-        chatClientSelector.getAvailableModelNames().forEach(name -> sb.append("- ").append(name).append("\n"));
+        chatClientSelector.getAvailableModelNames()
+                .forEach(name -> sb.append("- ").append(name).append(":")
+                        .append(SupportChatModeType.getChatModelCapabilityDescription(name))
+                        .append("\n")
+                );
         sb.append("\n");
 
         // 2. 用户画像todo 先不拼这个，容易污染大模型意图
@@ -861,6 +866,7 @@ public class PromptManagerBuilder {
         sb.append("【重要】请直接输出修改后的完整内容，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。");
         return sb.toString();
     }
+
     /**
      * 构建竞争模式评审步骤的专用提示词
      */
@@ -1036,6 +1042,7 @@ public class PromptManagerBuilder {
             }
         }
     }
+
     /**
      * 解析输入参数中的变量引用，例如 {step1.output} -> 上下文中的实际对象
      */

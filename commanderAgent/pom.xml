@@ -107,6 +107,11 @@
             </exclusions>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-ollama</artifactId>
+        </dependency>
+
         <!--############################## spring-ai-vector ###########################-->
         <dependency>
             <groupId>org.springframework.ai</groupId>

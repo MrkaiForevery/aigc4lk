@@ -7,6 +7,9 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.ollama.OllamaChatModel;
+import org.springframework.ai.ollama.api.OllamaApi;
+import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +29,8 @@ public class ChatModelManager {
         this.configLoader = loader;
     }
 
+
+    //--------------------------云端大模型注入-----------------------//
     @Bean
     public DashScopeApi dashScopeApi() {
         return DashScopeApi.builder()
@@ -79,5 +84,64 @@ public class ChatModelManager {
     @Bean("plusModelClient")
     public ChatClient plusModelClient(@Qualifier("plusModel") ChatModel reasoningModel) {
         return ChatClient.builder(reasoningModel).build();
+    }
+
+
+    @Bean("qwenVoiceModel")
+    public DashScopeChatModel qwenVoiceModel(DashScopeApi api) {
+        return DashScopeChatModel.builder()
+                .dashScopeApi(api)
+                .defaultOptions(DashScopeChatOptions.builder()
+                        .withModel(SupportChatModeType.QWEN_VOICE.getModelName())
+                        .withTemperature(0.3)
+                        .build())
+                .build();
+    }
+
+    @Bean("qwenVoiceModelClient")
+    public ChatClient qwenVoiceModelClient(@Qualifier("qwenVoiceModel") ChatModel qwenVoiceModel) {
+        return ChatClient.builder(qwenVoiceModel).build();
+    }
+
+    //--------------------------本地大模型注入-----------------------//
+
+    @Bean
+    public OllamaApi localOllamaApi() {
+        return OllamaApi.builder()
+                .baseUrl("http://localhost:11434")
+                .build();
+    }
+
+    @Bean("localOllamaQwenModel")
+    public OllamaChatModel localOllamaQwenModel(OllamaApi localOllamaApi) {
+        return OllamaChatModel.builder()
+                .ollamaApi(localOllamaApi)
+                .defaultOptions(OllamaChatOptions.builder()
+                        .model(SupportChatModeType.LOCAL_OLLAMA_QWEN.getModelName())
+                        .temperature(0.3)
+                        .build())
+                .build();
+    }
+
+    @Bean("localOllamaQwenModelClient")
+    public ChatClient localOllamaQwenModelClient(@Qualifier("localOllamaQwenModel") OllamaChatModel localOllamaQwenModel) {
+        return ChatClient.builder(localOllamaQwenModel).build();
+    }
+
+
+    @Bean("localOllamaDeepseekModel")
+    public OllamaChatModel localOllamaDeepseekModel(OllamaApi localOllamaApi) {
+        return OllamaChatModel.builder()
+                .ollamaApi(localOllamaApi)
+                .defaultOptions(OllamaChatOptions.builder()
+                        .model(SupportChatModeType.LOCAL_OLLAMA_deepseek.getModelName())
+                        .temperature(0.3)
+                        .build())
+                .build();
+    }
+
+    @Bean("localOllamaDeepseekModelClient")
+    public ChatClient localOllamaDeepseekModelClient(@Qualifier("localOllamaDeepseekModel") OllamaChatModel localOllamaDeepseekModel) {
+        return ChatClient.builder(localOllamaDeepseekModel).build();
     }
 }

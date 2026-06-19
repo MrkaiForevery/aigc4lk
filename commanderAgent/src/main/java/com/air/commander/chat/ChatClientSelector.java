@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 大模型chatClient模型选择器
@@ -52,5 +53,15 @@ public class ChatClientSelector {
      */
     public Set<String> getAvailableModelNames() {
         return clientMap.keySet();
+    }
+
+    /**
+     * 根据部署类型的不同获取该类型下的所有可用模型名称（Bean名称），用于生成提示词时告知LLM可选模型。
+     */
+    public Set<String> getAvailableModelNamesByDeploymentType(SupportChatModeType.DeploymentType deploymentType) {
+        Set<String> chatClientBeanNames = SupportChatModeType.getChatClientNameByDeploymentType(deploymentType);
+        return clientMap.keySet().stream()
+                .filter(chatClientBeanNames ::contains)
+                .collect(Collectors.toSet());
     }
 }
