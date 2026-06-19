@@ -302,6 +302,17 @@ public class PromptManagerBuilder {
                 );
         sb.append("\n");
 
+        // ========= 模型选择指南（新增） =========
+        sb.append("【模型选择指南】\n");
+        sb.append("请根据以下原则，从【可用大模型列表】中为每个 LLM_CALL 步骤选择最合适的模型：\n");
+        sb.append("1. 优先使用本地模型处理简单、低延迟任务：意图识别、简单分类、关键词提取、轻量文本生成。本地模型无网络成本，响应极快。\n");
+        sb.append("2. 一般推理、中等复杂度任务（如步骤规划、普通摘要、格式转换）可使用云端均衡模型（如 plusModelClient），速度快且成本适中。\n");
+        sb.append("3. 高难度推理、多步逻辑分析、方案评估择优、复杂报告生成等任务，必须使用云端推理模型（如 reasoningModelClient 或 MAIN_REASONING_MODEL）。\n");
+        sb.append("4. 语音相关任务（如文本转语音）只能使用语音专用模型（如 qwenVoiceModelClient）。\n");
+        sb.append("5. 对于同一个请求，尽量控制云端高成本模型的使用次数，除非任务确实需要。\n");
+        sb.append("6. 在竞争模式中，竞争者应尽量选用不同特征（本地/云端、快/慢、通用/推理）的模型，以保证方案多样性。\n");
+        sb.append("7. 如果某个步骤只需要简单判断（如条件分支的判断），应使用本地或快速云端模型，避免浪费推理资源。\n\n");
+
         // 2. 用户画像todo 先不拼这个，容易污染大模型意图
 //        if (ctx.getUserProfile() != null && !ctx.getUserProfile().isEmpty()) {
 //            sb.append("=== 用户画像 ===\n");
@@ -699,6 +710,20 @@ public class PromptManagerBuilder {
         sb.append("   - 循环纠正中，主步骤序列不应包含与循环目标无关的步骤。\n\n");
         sb.append("   - 竞争模式中，竞争者的步骤数量应控制在必要范围内，避免过度冗余。\n\n");
 
+        sb.append("8. 模型选择合理性 (modelSelection)：每个 LLM_CALL 步骤指定的 model 是否与任务难度、可用模型能力和成本约束匹配？\n");
+        sb.append("   - 简单任务（如意图识别、简单分类、短文本生成）不应使用高成本云端推理模型（如 MAIN_REASONING_MODEL）。\n");
+        sb.append("   - 高难度推理（如复杂分析、方案评估、多步逻辑）不应使用能力不足的本地小模型（如 localOllamaQwen3ModelClient）。\n");
+        sb.append("   - 条件判断步骤应使用快速模型（本地或云端轻量），避免不必要的延迟。\n");
+        sb.append("   - 同一计划内应尽量减少不必要的模型切换，保持一致性。\n\n");
+
+        // 紧接在【评估标准】之前或之后
+        sb.append("=== 可用大模型列表（供评估参考） ===\n");
+        chatClientSelector.getAvailableModelNames()
+                .forEach(name -> sb.append("- ").append(name).append("：")
+                        .append(SupportChatModeType.getChatModelCapabilityDescription(name))
+                        .append("\n"));
+        sb.append("\n");
+
         // ========= 候选计划展示（精简序列化） =========
         sb.append("=== 候选计划 ===\n");
         List<String> labels = new ArrayList<>();
@@ -732,7 +757,7 @@ public class PromptManagerBuilder {
         sb.append("  \"scores\": {\n");
         for (int i = 0; i < labels.size(); i++) {
             String label = labels.get(i);
-            sb.append("    \"").append(label).append("\": {\"agentAccuracy\": 8, \"dataFlow\": 7, \"executionMode\": 8, \"correctionEffectiveness\": 8, \"competitiveDesign\": 8, \"checkpoint\": 9, \"efficiency\": 8}");
+            sb.append("    \"").append(label).append("\": {\"agentAccuracy\": 8, \"dataFlow\": 7, \"executionMode\": 8, \"modelSelection\": 8, \"correctionEffectiveness\": 8, \"competitiveDesign\": 8, \"checkpoint\": 9, \"efficiency\": 8}");
             if (i < labels.size() - 1) {
                 sb.append(",");
             }
@@ -741,7 +766,8 @@ public class PromptManagerBuilder {
         sb.append("  },\n");
         sb.append("  \"reason\": \"选择该候选的简要理由\"\n");
         sb.append("}");
-        sb.append("⚠️ 注意：你必须直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。\n");
+        sb.append("请注意：评估时必须仔细检查每个步骤的 model 字段是否与任务匹配，参考上方可用模型列表中的能力描述。\n");
+        sb.append("特别注意：你必须直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。\n");
         sb.append("直接输出 JSON，不要包含任何额外文字、注释或 Markdown 标记。");
 
         return sb.toString();

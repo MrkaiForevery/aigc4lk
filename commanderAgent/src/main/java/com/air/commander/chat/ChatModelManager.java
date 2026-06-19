@@ -43,7 +43,7 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportChatModeType.QWEN_TURBO.getModelName())
+                        .withModel(SupportChatModeType.QWEN_FAST.getModelName())
                         .withTemperature(0.5)
                         .build())
                 .build();
@@ -59,7 +59,7 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportChatModeType.QWEN_LONG.getModelName())
+                        .withModel(SupportChatModeType.MAIN_REASONING_MODEL.getModelName())
                         .withTemperature(0.3)
                         .build())
                 .build();
@@ -76,7 +76,7 @@ public class ChatModelManager {
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
                         .withModel(SupportChatModeType.QWEN_PLUS.getModelName())
-                        .withTemperature(0.3)
+                        .withTemperature(0.4)
                         .build())
                 .build();
     }
@@ -112,36 +112,36 @@ public class ChatModelManager {
                 .build();
     }
 
-    @Bean("localOllamaQwenModel")
-    public OllamaChatModel localOllamaQwenModel(OllamaApi localOllamaApi) {
+    @Bean("localOllamaQwen3Model")
+    public OllamaChatModel localOllamaQwen3Model(OllamaApi localOllamaApi) {
         return OllamaChatModel.builder()
                 .ollamaApi(localOllamaApi)
                 .defaultOptions(OllamaChatOptions.builder()
-                        .model(SupportChatModeType.LOCAL_OLLAMA_QWEN.getModelName())
+                        .model(SupportChatModeType.LOCAL_OLLAMA_QWEN3.getModelName())
                         .temperature(0.3)
                         .build())
                 .build();
     }
 
-    @Bean("localOllamaQwenModelClient")
-    public ChatClient localOllamaQwenModelClient(@Qualifier("localOllamaQwenModel") OllamaChatModel localOllamaQwenModel) {
-        return ChatClient.builder(localOllamaQwenModel).build();
+    @Bean("localOllamaQwen3ModelClient")
+    public ChatClient localOllamaQwen3ModelClient(@Qualifier("localOllamaQwen3Model") OllamaChatModel localOllamaQwen3Model) {
+        return ChatClient.builder(localOllamaQwen3Model).build();
     }
 
 
-    @Bean("localOllamaDeepseekModel")
-    public OllamaChatModel localOllamaDeepseekModel(OllamaApi localOllamaApi) {
+    @Bean("localOllamaQwen2Model")
+    public OllamaChatModel localOllamaQwen2Model(OllamaApi localOllamaApi) {
         return OllamaChatModel.builder()
                 .ollamaApi(localOllamaApi)
                 .defaultOptions(OllamaChatOptions.builder()
-                        .model(SupportChatModeType.LOCAL_OLLAMA_deepseek.getModelName())
+                        .model(SupportChatModeType.LOCAL_OLLAMA_QWEN2.getModelName())
                         .temperature(0.3)
                         .build())
                 .build();
     }
 
     @Bean("localOllamaDeepseekModelClient")
-    public ChatClient localOllamaDeepseekModelClient(@Qualifier("localOllamaDeepseekModel") OllamaChatModel localOllamaDeepseekModel) {
-        return ChatClient.builder(localOllamaDeepseekModel).build();
+    public ChatClient localOllamaQwen2ModelClient(@Qualifier("localOllamaQwen2Model") OllamaChatModel localOllamaQwen2Model) {
+        return ChatClient.builder(localOllamaQwen2Model).build();
     }
 }

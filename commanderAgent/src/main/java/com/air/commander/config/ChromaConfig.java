@@ -24,17 +24,20 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ChromaConfig {
 
-    private final static String QWEN3_EMBEDDING_NAME = "qwen3-embedding:0.6b";
+    private final static String NOMIC_EMBED_TEXT = "nomic-embed-text:v1.5";
 
     private final RemoteConfigLoader remoteConfigLoader;
 
 
+    /**
+     * 使用本地的Embedding模型
+     */
     @Bean("localOllamaEmbeddingModel")
     public EmbeddingModel localOllamaEmbeddingModel(OllamaApi localOllamaApi) {
         return OllamaEmbeddingModel.builder()
                 .ollamaApi(localOllamaApi)
                 .defaultOptions(OllamaEmbeddingOptions.builder()
-                        .model(QWEN3_EMBEDDING_NAME)
+                        .model(NOMIC_EMBED_TEXT)
                         .build())
                 .build();
     }
