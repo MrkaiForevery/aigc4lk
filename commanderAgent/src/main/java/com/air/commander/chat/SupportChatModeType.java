@@ -12,11 +12,11 @@ public enum SupportChatModeType {
 
     QWEN_FAST("qwen", "qwen3.5-35b-a3b",
             "fastModel", "fastModelClient",
-            "云端通义千问32B，综合能力强，适合长文本理解、复杂生成、一般推理任务，非极速模型", DeploymentType.CLOUD),
-    MAIN_REASONING_MODEL("qwen", "deepseek-r1",
+            "云端通义千问35B，综合能力强，适合长文本理解、复杂生成、一般推理任务，非极速模型", DeploymentType.CLOUD),
+    MAIN_REASONING_MODEL("qwen", "deepseek-v3.1",
             "reasoningModel", "reasoningModelClient",
-            "DeepSeek-R1原生推理模型，671B MoE，长思维链，逻辑严密，适合高难度多步推理、需求分析、方案评估，云端旗舰", DeploymentType.CLOUD),
-    QWEN_PLUS("qwen", "qwen3.6-plus",
+            "云端deepseek-v3.1推理模型，671B MoE，长思维链，逻辑严密，适合高难度多步推理、需求分析、方案评估，云端旗舰", DeploymentType.CLOUD),
+    QWEN_PLUS("qwen", "qwen3.6-35b-a3b",
             "plusModel", "plusModelClient",
             "云端通义千问增强型，推理与速度均衡，适合中等复杂度任务、步骤规划、方案对比", DeploymentType.CLOUD),
 

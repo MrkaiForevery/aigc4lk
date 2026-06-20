@@ -4,6 +4,7 @@ import com.air.commander.chat.ChatClientSelector;
 import com.air.commander.chat.SupportChatModeType;
 import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.air.commander.model.MemoryContext;
+import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.Step;
 import com.air.commander.orchestrator.CandidateGenerator;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
@@ -670,58 +671,48 @@ public class PromptManagerBuilder {
 
         // ========= 评估标准（强化常见错误警示） =========
         sb.append("【评估标准】\n");
-
         sb.append("1. Agent 准确性 (agentAccuracy)：Agent 的使用是否与可用 Agent 的能力严格匹配？\n");
         sb.append("   - ⚠️ document-agent 只能用于文档生成、报告撰写，绝对不可用于网络搜索、数据收集。\n");
         sb.append("   - 若某候选误将搜索任务分配给 document-agent，该维度应评为 1-3 分，且该候选不应成为 winner。\n");
-
         sb.append("2. 数据流完整性 (dataFlow)：每个步骤的 input 是否包含了完成任务所需的数据？\n");
         sb.append("   - 依赖前序步骤的步骤，input 中必须使用 {stepX.output} 引用前序输出，不能为空。\n");
         sb.append("   - 在条件分支中，不同分支的步骤应正确引用条件步骤或更早步骤的输出。\n");
-        sb.append("   - 在并行执行中，并行步骤之间不能有隐式数据依赖（必须通过 dependsOn 显式声明）。\n\n");
-        sb.append("   - 在循环纠正中，评估步骤必须引用主步骤的输出，修正步骤必须引用评估反馈。\n\n");
-        sb.append("   - 在竞争模式中，评审步骤的 input 必须引用竞争组的聚合输出 {groupId.output}。\n\n");
-
+        sb.append("   - 在并行执行中，并行步骤之间不能有隐式数据依赖（必须通过 dependsOn 显式声明）。\n");
+        sb.append("   - 在循环纠正中，评估步骤必须引用主步骤的输出，修正步骤必须引用评估反馈。\n");
+        sb.append("   - 在竞争模式中，评审步骤的 input 必须引用竞争组的聚合输出 {groupId.output}。\n");
         sb.append("3. 执行模式与结构 (executionMode)：执行模式选择是否合理？步骤结构是否清晰？\n");
         sb.append("   - 若任务包含多个互不依赖的子任务，应使用 PARALLEL 模式；若强行使用 SEQUENTIAL，扣分。\n");
         sb.append("   - 若任务需要根据中间结果动态选择后续路径，必须使用 CONDITIONAL 模式，且条件步骤 (LLM_CALL) 的 task 必须明确要求输出分类标签（如“只输出一个词：下滑/平稳/增长”）。\n");
         sb.append("   - 若任务追求高质量输出且允许迭代优化，应使用 ITERATIVE_CORRECTION 模式。\n");
-        sb.append("   - 若任务需要多方案择优，应使用 COMPETITIVE 模式。\n\n");
-
+        sb.append("   - 若任务需要多方案择优，应使用 COMPETITIVE 模式。\n");
         sb.append("4. 循环纠正有效性 (correctionEffectiveness)：当使用 ITERATIVE_CORRECTION 模式时，循环配置是否完整且合理？\n");
         sb.append("   - 计划必须包含 correctionConfig，且其中 loops 数组不能为空。\n");
         sb.append("   - 每个循环必须指定 evaluatorStepId，且该步骤的 task 必须明确要求输出评分（如 JSON 格式包含 score 字段）。\n");
         sb.append("   - 评估步骤之前的步骤构成主步骤序列，它们之间的依赖关系必须清晰正确。\n");
         sb.append("   - 如果存在修正步骤（correctorStepId），其 input 必须引用评估步骤的输出（反馈）和需要修正的原始内容。\n");
         sb.append("   - maxIterations 和 qualityThreshold 必须合理（迭代次数建议 2-5 次，阈值建议 70-90）。\n");
-        sb.append("   - 多个循环闭环之间的顺序和数据传递必须正确（前一个循环的最终输出应能传递给后一个循环）。\n\n");
-
+        sb.append("   - 多个循环闭环之间的顺序和数据传递必须正确（前一个循环的最终输出应能传递给后一个循环）。\n");
         sb.append("5. 竞争设计合理性 (competitiveDesign)：当使用 COMPETITIVE 模式时，竞争配置是否完整且合理？\n");
         sb.append("   - 计划必须包含 competitiveConfig，且其中 groups 数组不能为空。\n");
         sb.append("   - 每个竞争组必须指定 selectorStepId（评审步骤），且评审步骤的 task 应描述如何比较竞争者输出并选出最优。\n");
         sb.append("   - 同一组内的竞争者必须使用不同的 LLM 模型（model 字段），以保证方案多样性。\n");
         sb.append("   - 每个竞争者可以包含一个或多个步骤（stepIds），步骤间的依赖关系必须正确。\n");
-        sb.append("   - 多个竞争组之间的顺序和数据传递必须合理。\n\n");
-
-
+        sb.append("   - 多个竞争组之间的顺序和数据传递必须合理。\n");
         sb.append("6. 检查点合理性 (checkpoint)：高风险步骤或不可逆操作前是否合理插入了 INTERRUPT 检查点？\n");
         sb.append("   - 涉及敏感数据访问、发送邮件、扣款、发布内容等操作前，应有 CREDENTIAL 或 CONFIRM 检查点。\n");
-        sb.append("   - 在 CONDITIONAL 模式中，如果某个分支包含高风险操作，检查点应只在该分支内出现，不影响其他分支。\n\n");
-        sb.append("   - 在 ITERATIVE_CORRECTION 模式中，修正步骤之前、达到最大迭代次数后应合理插入检查点。\n\n");
-        sb.append("   - 在 COMPETITIVE 模式中，竞争者的关键操作前或评审步骤之前可插入检查点。\n\n");
-
+        sb.append("   - 在 CONDITIONAL 模式中，如果某个分支包含高风险操作，检查点应只在该分支内出现，不影响其他分支。\n");
+        sb.append("   - 在 ITERATIVE_CORRECTION 模式中，修正步骤之前、达到最大迭代次数后应合理插入检查点。\n");
+        sb.append("   - 在 COMPETITIVE 模式中，竞争者的关键操作前或评审步骤之前可插入检查点。\n");
         sb.append("7. 步骤效率 (efficiency)：是否存在可以合并的冗余步骤？\n");
         sb.append("   - 多个连续的 LLM_CALL 步骤如果处理同一批数据，应考虑合并为一个步骤。\n");
-        sb.append("   - 条件分支中，不同分支如果包含重复的步骤，应提取到条件判断之前或之后。\n\n");
-        sb.append("   - 循环纠正中，主步骤序列不应包含与循环目标无关的步骤。\n\n");
-        sb.append("   - 竞争模式中，竞争者的步骤数量应控制在必要范围内，避免过度冗余。\n\n");
-
+        sb.append("   - 条件分支中，不同分支如果包含重复的步骤，应提取到条件判断之前或之后。\n");
+        sb.append("   - 循环纠正中，主步骤序列不应包含与循环目标无关的步骤。\n");
+        sb.append("   - 竞争模式中，竞争者的步骤数量应控制在必要范围内，避免过度冗余。\n");
         sb.append("8. 模型选择合理性 (modelSelection)：每个 LLM_CALL 步骤指定的 model 是否与任务难度、可用模型能力和成本约束匹配？\n");
         sb.append("   - 简单任务（如意图识别、简单分类、短文本生成）不应使用高成本云端推理模型（如 MAIN_REASONING_MODEL）。\n");
         sb.append("   - 高难度推理（如复杂分析、方案评估、多步逻辑）不应使用能力不足的本地小模型（如 localOllamaQwen3ModelClient）。\n");
         sb.append("   - 条件判断步骤应使用快速模型（本地或云端轻量），避免不必要的延迟。\n");
-        sb.append("   - 同一计划内应尽量减少不必要的模型切换，保持一致性。\n\n");
-
+        sb.append("   - 同一计划内应尽量减少不必要的模型切换，保持一致性。\n");
         sb.append("9. 非适用维度评分规则：若候选计划未采用竞争模式（COMPETITIVE），则 competitiveDesign 维度自动评 10 分；若未采用循环纠正模式（ITERATIVE_CORRECTION），则 correctionEffectiveness 维度自动评 10 分。此类维度视为“不适用，无缺陷”，满分通过。\n\n");
 
         // 紧接在【评估标准】之前或之后
@@ -742,11 +733,8 @@ public class PromptManagerBuilder {
 
             sb.append("候选 ").append(label).append("（模型：").append(c.choseChatClientName()).append("）：\n");
             try {
-                // 只序列化关键字段，避免输出大量 null
-                Map<String, Object> planMap = objectMapper.convertValue(c.plan(), Map.class);
-                // 去除所有 null 值的字段
-                removeNullValues(planMap);
-                sb.append(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(planMap));
+                Map<String, Object> compact = buildCompactPlanView(c.plan());
+                sb.append(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(compact));
             } catch (Exception e) {
                 sb.append("（计划序列化失败）");
             }
@@ -755,28 +743,22 @@ public class PromptManagerBuilder {
 
         // ========= 输出要求 =========
         sb.append("请对上述 ").append(candidates.size()).append(" 个候选计划分别评分，并选出最优。\n");
-        sb.append("评分维度：agentAccuracy、dataFlow、checkpoint、efficiency，每项 1-10 分。\n");
+        sb.append("评分维度（共 8 项，每项 1-10 分）：agentAccuracy、dataFlow、executionMode、modelSelection、correctionEffectiveness、competitiveDesign、checkpoint、efficiency。\n");
         sb.append("注意：若某候选 agentAccuracy 得分低于 5，则不应选为 winner。\n\n");
 
         // 动态生成评分格式示例，避免尾随逗号
-        sb.append("输出 JSON 格式（不要包含其他内容）：\n");
+        sb.append("（以下 JSON 中的分数仅为格式示例，并非真实评分。你必须根据候选计划的实际质量，独立、客观地给出每个维度的真实分数。）\n");
         sb.append("{\n");
-        sb.append("  \"winner\": \"胜出的候选标签\",\n");
+        sb.append("  \"winner\": \"B\",\n");
         sb.append("  \"scores\": {\n");
-        for (int i = 0; i < labels.size(); i++) {
-            String label = labels.get(i);
-            sb.append("    \"").append(label).append("\": {\"agentAccuracy\": 8, \"dataFlow\": 7, \"executionMode\": 8, \"modelSelection\": 8, \"correctionEffectiveness\": 8, \"competitiveDesign\": 8, \"checkpoint\": 9, \"efficiency\": 8}");
-            if (i < labels.size() - 1) {
-                sb.append(",");
-            }
-            sb.append("\n");
-        }
+        sb.append("    \"A\": {\"agentAccuracy\": 9, \"dataFlow\": 6, \"executionMode\": 7, \"modelSelection\": 5, \"correctionEffectiveness\": 8, \"competitiveDesign\": 10, \"checkpoint\": 9, \"efficiency\": 7},\n");
+        sb.append("    \"B\": {\"agentAccuracy\": 7, \"dataFlow\": 9, \"executionMode\": 8, \"modelSelection\": 8, \"correctionEffectiveness\": 9, \"competitiveDesign\": 10, \"checkpoint\": 8, \"efficiency\": 9},\n");
+        sb.append("    \"C\": {\"agentAccuracy\": 6, \"dataFlow\": 8, \"executionMode\": 7, \"modelSelection\": 7, \"correctionEffectiveness\": 7, \"competitiveDesign\": 10, \"checkpoint\": 8, \"efficiency\": 8}\n");
         sb.append("  },\n");
-        sb.append("  \"reason\": \"选择该候选的简要理由\"\n");
-        sb.append("}");
+        sb.append("  \"reason\": \"候选B在数据流和效率上表现最优，虽然Agent准确性略低但未致命\"\n");
+        sb.append("}\n");
+        sb.append("\n");
 
-        sb.append("\n\n");
-        sb.append("请注意：评估时必须仔细检查每个步骤的 model 字段是否与任务匹配，参考上方可用模型列表中的能力描述。\n");
         sb.append("特别注意：你必须直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。\n");
         sb.append("直接输出 JSON，不要包含任何额外文字、注释或 Markdown 标记。");
 
@@ -1192,5 +1174,91 @@ public class PromptManagerBuilder {
                 removeNullValues((Map<String, Object>) value);
             }
         }
+    }
+
+    private Map<String, Object> buildCompactPlanView(OrchestrationPlan plan) {
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("planId", plan.getPlanId());
+        view.put("executionMode", plan.getExecutionMode());
+
+        // 精简步骤列表
+        List<Map<String, Object>> compactSteps = new ArrayList<>();
+        for (Step step : plan.getSteps()) {
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("id", step.getId());
+            s.put("type", step.getType());
+            s.put("task", step.getTask());
+
+            // model 和 agent 只在有值时输出
+            if (step.getModel() != null) s.put("model", step.getModel());
+            if (step.getAgent() != null) s.put("agent", step.getAgent());
+
+            // dependsOn 只在非空时输出
+            if (step.getDependsOn() != null && !step.getDependsOn().isEmpty()) {
+                s.put("dependsOn", step.getDependsOn());
+            }
+
+            // input：只输出关键的数据引用键名，不输出完整的 userQuery
+            Map<String, Object> compactInput = buildCompactInput(step);
+            if (!compactInput.isEmpty()) {
+                s.put("input", compactInput);
+            }
+
+            // checkpoint 精简
+            if (step.getCheckpoint() != null) {
+                Map<String, Object> cp = new LinkedHashMap<>();
+                cp.put("type", step.getCheckpoint().getType());
+                cp.put("question", step.getCheckpoint().getQuestion());
+                s.put("checkpoint", cp);
+            }
+
+            // conditionConfig 保留（评估条件分支需要）
+            if (step.getConditionConfig() != null) {
+                s.put("conditionConfig", step.getConditionConfig());
+            }
+
+            compactSteps.add(s);
+        }
+        view.put("steps", compactSteps);
+
+        // correctionConfig（评估循环纠正需要）
+        if (plan.getCorrectionConfig() != null) {
+            view.put("correctionConfig", plan.getCorrectionConfig());
+        }
+
+        // competitiveConfig（评估竞争设计需要）
+        if (plan.getCompetitiveConfig() != null) {
+            view.put("competitiveConfig", plan.getCompetitiveConfig());
+        }
+
+        return view;
+    }
+
+    private Map<String, Object> buildCompactInput(Step step) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        if (step.getInput() == null || step.getInput().isEmpty()) {
+            return input;
+        }
+
+        // 只保留数据引用相关的 key，去掉 userQuery 和重复的原始数据
+        for (Map.Entry<String, Object> entry : step.getInput().entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+
+            // 跳过 userQuery（评估不关心，且极度冗余）
+            if ("userQuery".equals(key)) continue;
+
+            // 对于字符串值，如果太长就截断
+            if (value instanceof String str) {
+                if (str.length() > 100) {
+                    input.put(key, str.substring(0, 100) + "...(截断)");
+                } else {
+                    input.put(key, value);
+                }
+            } else {
+                input.put(key, value);
+            }
+        }
+        return input;
     }
 }

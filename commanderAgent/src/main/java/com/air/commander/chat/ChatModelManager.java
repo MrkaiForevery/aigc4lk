@@ -92,7 +92,10 @@ public class ChatModelManager {
                 .defaultOptions(DashScopeChatOptions.builder()
                         .model(SupportChatModeType.QWEN_FAST.getModelName())
                         .multiModel(true)
-                        .temperature(0.5)
+                        .temperature(0.3)
+                        .topP(0.7)
+                        .enableThinking(false)
+                        .enableSearch(false)
                         .build())
                 .build();
     }
@@ -108,7 +111,10 @@ public class ChatModelManager {
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
                         .model(SupportChatModeType.MAIN_REASONING_MODEL.getModelName())
-                        .temperature(0.3)
+                        .temperature(0.2)
+                        .enableThinking(false)
+                        .topP(0.5)
+                        .enableSearch(false)
                         .build())
                 .build();
     }
@@ -125,7 +131,10 @@ public class ChatModelManager {
                 .defaultOptions(DashScopeChatOptions.builder()
                         .model(SupportChatModeType.QWEN_PLUS.getModelName())
                         .multiModel(true)
-                        .temperature(0.4)
+                        .temperature(0.3)
+                        .enableThinking(false)
+                        .topP(0.5)
+                        .enableSearch(false)
                         .build())
                 .build();
     }
@@ -143,7 +152,9 @@ public class ChatModelManager {
                 .defaultOptions(DashScopeChatOptions.builder()
                         .model(SupportChatModeType.QWEN_VOICE.getModelName())
                         .multiModel(true)
-                        .temperature(0.5)
+                        .temperature(0.8)
+                        .topP(0.8)
+                        .enableThinking(false)
                         .build())
                 .build();
     }
@@ -170,7 +181,7 @@ public class ChatModelManager {
                 .ollamaApi(localOllamaApi)
                 .defaultOptions(OllamaChatOptions.builder()
                         .model(SupportChatModeType.LOCAL_OLLAMA_QWEN3.getModelName())
-                        .temperature(0.3)
+                        .temperature(0.7)
                         .build())
                 .build();
     }
@@ -187,7 +198,7 @@ public class ChatModelManager {
                 .ollamaApi(localOllamaApi)
                 .defaultOptions(OllamaChatOptions.builder()
                         .model(SupportChatModeType.LOCAL_OLLAMA_LLAMA3.getModelName())
-                        .temperature(0.3)
+                        .temperature(0.7)
                         .build())
                 .build();
     }
