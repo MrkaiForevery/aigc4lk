@@ -25,12 +25,12 @@ public enum SupportChatModeType {
             "qwenVoiceModel", "qwenVoiceModelClient",
             "云端语音合成专用模型，支持实时TTS，适合将文本转为自然语音输出",DeploymentType.CLOUD ),
 
-    LOCAL_OLLAMA_QWEN3("local_ollama", "qwen3:0.6b",
-            "localOllamaQwen3Model", "localOllamaQwen3ModelClient",
-            "本地轻量对话模型0.6B，GPU加速，响应极快，适合意图识别、简单应答、轻量生成，成本低",DeploymentType.LOCAL  ),
-    LOCAL_OLLAMA_QWEN2("local_ollama", "qwen2.5:0.5b",
-            "localOllamaQwen2Model", "localOllamaQwen2ModelClient",
-            "本地超轻量对话模型0.5B，显存占用极小，适合极简单分类、关键词提取、快速兜底",DeploymentType.LOCAL  );
+    LOCAL_OLLAMA_QWEN3("local_ollama", "qwen3.5:0.8b",
+            "localOllamaQWEN3Model", "localOllamaQWEN3ModelClient",
+            "本地轻量对话模型0.8B，GPU加速，擅长于中文场景，响应极快，适合意图识别、简单应答、轻量生成，成本低",DeploymentType.LOCAL  ),
+    LOCAL_OLLAMA_LLAMA3("local_ollama", "llama3.2:1b",
+            "localOllamaLLAMA3Model", "localOllamaLLAMA3ModelClient",
+            "本地轻量对话模型1B，GPU加速，擅长于英文场景，适合简单分类、关键词提取、快速兜底",DeploymentType.LOCAL  );
 
     private final String platformName;
     private final String modelName;

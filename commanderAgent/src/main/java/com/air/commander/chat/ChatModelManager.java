@@ -164,8 +164,8 @@ public class ChatModelManager {
                 .build();
     }
 
-    @Bean("localOllamaQwen3Model")
-    public OllamaChatModel localOllamaQwen3Model(OllamaApi localOllamaApi) {
+    @Bean("localOllamaQWEN3Model")
+    public OllamaChatModel localOllamaQWEN3Model(OllamaApi localOllamaApi) {
         return OllamaChatModel.builder()
                 .ollamaApi(localOllamaApi)
                 .defaultOptions(OllamaChatOptions.builder()
@@ -175,25 +175,25 @@ public class ChatModelManager {
                 .build();
     }
 
-    @Bean("localOllamaQwen3ModelClient")
-    public ChatClient localOllamaQwen3ModelClient(@Qualifier("localOllamaQwen3Model") OllamaChatModel localOllamaQwen3Model) {
-        return ChatClient.builder(localOllamaQwen3Model).build();
+    @Bean("localOllamaQWEN3ModelClient")
+    public ChatClient localOllamaQWEN3ModelClient(@Qualifier("localOllamaQWEN3Model") OllamaChatModel localOllamaQWEN3Model) {
+        return ChatClient.builder(localOllamaQWEN3Model).build();
     }
 
 
-    @Bean("localOllamaQwen2Model")
-    public OllamaChatModel localOllamaQwen2Model(OllamaApi localOllamaApi) {
+    @Bean("localOllamaLLAMA3Model")
+    public OllamaChatModel localOllamaLLAMA3Model(OllamaApi localOllamaApi) {
         return OllamaChatModel.builder()
                 .ollamaApi(localOllamaApi)
                 .defaultOptions(OllamaChatOptions.builder()
-                        .model(SupportChatModeType.LOCAL_OLLAMA_QWEN2.getModelName())
+                        .model(SupportChatModeType.LOCAL_OLLAMA_LLAMA3.getModelName())
                         .temperature(0.3)
                         .build())
                 .build();
     }
 
-    @Bean("localOllamaQwen2ModelClient")
-    public ChatClient localOllamaQwen2ModelClient(@Qualifier("localOllamaQwen2Model") OllamaChatModel localOllamaQwen2Model) {
-        return ChatClient.builder(localOllamaQwen2Model).build();
+    @Bean("localOllamaLLAMA3ModelClient")
+    public ChatClient localOllamaLLAMA3ModelClient(@Qualifier("localOllamaLLAMA3Model") OllamaChatModel localOllamaLLAMA3Model) {
+        return ChatClient.builder(localOllamaLLAMA3Model).build();
     }
 }
