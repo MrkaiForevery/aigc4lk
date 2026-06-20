@@ -11,7 +11,7 @@ import java.util.Set;
 @AllArgsConstructor
 public enum SupportChatModeType {
 
-    QWEN_FAST("qwen", "qwen3-32b",
+    QWEN_FAST("qwen", "qwen3.5-35b-a3b",
             "fastModel", "fastModelClient",
             "云端通义千问32B，综合能力强，适合长文本理解、复杂生成、一般推理任务，非极速模型", DeploymentType.CLOUD),
     MAIN_REASONING_MODEL("qwen", "deepseek-r1",
@@ -21,7 +21,7 @@ public enum SupportChatModeType {
             "plusModel", "plusModelClient",
             "云端通义千问增强型，推理与速度均衡，适合中等复杂度任务、步骤规划、方案对比",DeploymentType.CLOUD ),
 
-    QWEN_VOICE("qwen", "qwen-tts-realtime-latest",
+    QWEN_VOICE("qwen", "qwen-tts-latest",
             "qwenVoiceModel", "qwenVoiceModelClient",
             "云端语音合成专用模型，支持实时TTS，适合将文本转为自然语音输出",DeploymentType.CLOUD ),
 

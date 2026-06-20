@@ -46,7 +46,8 @@ public class ChromaConfig {
      * 创建 ChromaApi Bean，用于与 ChromaDB 通信
      */
     @Bean
-    public ChromaApi chromaApi(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
+    public ChromaApi chromaApi(@Qualifier("localRestClientBuilder") RestClient.Builder localRestClientBuilder,
+                               ObjectMapper objectMapper) {
         ChromaDbClientProperties chromaDbClientProperties = remoteConfigLoader.getChromaDbClientProperties();
         // 1. 构建 ChromaDB 连接 URL
         String host = chromaDbClientProperties.getClient().getHost();
@@ -54,7 +55,7 @@ public class ChromaConfig {
         String chromaUrl = host + ":" + port;
 
         // 2. 创建 ChromaApi 实例
-        var chromaApi = new ChromaApi(chromaUrl, restClientBuilder, objectMapper);
+        var chromaApi = new ChromaApi(chromaUrl, localRestClientBuilder, objectMapper);
 
         // 3. 设置认证凭据(如果是云端向量数据库，则需要设置访问的keyToken)
         String keyToken = chromaDbClientProperties.getClient().getKeyToken();

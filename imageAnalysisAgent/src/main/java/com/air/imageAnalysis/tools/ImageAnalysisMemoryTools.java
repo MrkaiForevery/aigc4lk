@@ -8,7 +8,6 @@ import com.air.api.feignClient.MemoryIdentityFeign;
 import com.air.api.feignClient.MemoryKnowledgeFeign;
 import com.air.api.feignClient.MemoryPreferenceFeign;
 import com.air.api.feignClient.MemoryProfileFeign;
-import com.air.platform.common.a2a.router.NacosA2ARouter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -28,8 +27,6 @@ public class ImageAnalysisMemoryTools {
     private final MemoryKnowledgeFeign memoryKnowledgeFeign;
     private final MemoryPreferenceFeign memoryPreferenceFeign;
 
-    /**注入平台自定义的a2aRouter**/
-    private final NacosA2ARouter a2aRouter;
 
     //----------------------------调用Memory服务的tools集合--------------------------------//
     @Tool(description = "获取用户身份信息")

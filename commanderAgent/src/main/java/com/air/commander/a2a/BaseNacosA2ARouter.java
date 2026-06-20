@@ -12,6 +12,7 @@ import io.a2a.spec.Message;
 import io.a2a.spec.TextPart;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -57,7 +58,7 @@ public class BaseNacosA2ARouter {
                               NacosAgentCardProvider nacosAgentCardProvider,
                               ResilienceManager resilience,
                               ObjectMapper objectMapper,
-                              RestClient.Builder restClientBuilder,
+                              @Qualifier("a2aRestClientBuilder") RestClient.Builder a2aRestClientBuilder,
                               PromptManagerBuilder promptManagerBuilder) {   // 注入 Spring 管理的 ObjectMapper
         this.discoveryClient = discoveryClient;
         this.agentCardProvider = nacosAgentCardProvider;
@@ -65,7 +66,7 @@ public class BaseNacosA2ARouter {
         // 若Spring没有提供ObjectMapper，则使用自定义配置；否则用注入的。
         this.objectMapper = objectMapper;
         // 构建并复用RestClient实例
-        this.restClient = restClientBuilder.build();
+        this.restClient = a2aRestClientBuilder.build();
         this.promptManagerBuilder = promptManagerBuilder;
         ;
     }

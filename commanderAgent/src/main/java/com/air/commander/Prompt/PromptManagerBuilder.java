@@ -50,6 +50,7 @@ public class PromptManagerBuilder {
         sb.append("- 场景标识本身可能没有直接语义，你需要根据标识的字面含义或常识推断其代表的任务类型。\n");
         sb.append("- 如果用户请求与所有预定义场景均**没有明确、完整的关联**，即使存在个别关键词重叠，也必须将 predefined 设为 false。\n");
         sb.append("- **禁止因为场景标识包含某些字母或相似词汇，就强行匹配一个不相关的场景。**\n");
+        sb.append("- 当场景标识本身为缩写或无明确语义时，请直接判定为无法匹配（predefined=false），不要臆测。\n");
         sb.append("- 在不确定是否匹配时，**宁可 predefined=false，也绝不强行匹配**。\n\n");
         // =============================================
 
@@ -81,10 +82,10 @@ public class PromptManagerBuilder {
 
         // 复杂度评估标准
         sb.append("【复杂度评估标准】\n");
-        sb.append("- 1-2：简单查询或单步任务\n");
-        sb.append("- 3：需要2-3个步骤或简单分析\n");
-        sb.append("- 4：需要多步分析、调用外部服务或涉及敏感数据\n");
-        sb.append("- 5：高度复杂，需要多个Agent协作或人工干预\n\n");
+        sb.append("- 1-2：简单问答、单步文本生成\n");
+        sb.append("- 3：需要连续2-3个分析/处理步骤，但逻辑线性\n");
+        sb.append("- 4：多步非线性流程，可能涉及条件分支、外部工具或敏感操作\n");
+        sb.append("- 5：多Agent协作、竞争择优、需要用户多次确认的复杂流程\n\n");
 
 //        // 风险提示（辅助判断）
 //        sb.append("【高风险信号】（如果出现以下情况，complexity至少为4，且可能需要检查点）\n");
@@ -92,15 +93,13 @@ public class PromptManagerBuilder {
 //        sb.append("- 需要发送邮件、扣款、发布内容等不可逆操作\n");
 //        sb.append("- 用户明确要求“确认”或“审核”\n\n");
 
-        // 输出格式
-        sb.append("请以 JSON 格式返回（不要包含其他内容）：\n");
-        sb.append("{ \"predefined\": true/false");
-        // ========== 修改：强调 scenario 字段的条件性 ==========
-        sb.append(", \"scenario\": \"场景标识（仅当 predefined=true 时必填，否则必须省略该字段）\"");
-        // =================================================
-        sb.append(", \"complexity\": 1-5, \"highRisk\": true/false }\n");
-        sb.append("【重要】请直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。");
-        sb.append("如果 predefined 为 false，则 JSON 中只能包含 predefined、complexity、highRisk 三个字段。");
+        // 输出格式改为示例
+        sb.append("输出格式（请严格遵循以下 JSON 结构，不要添加额外文字）：\n");
+        sb.append("当匹配到预定义场景时（predefined=true）：\n");
+        sb.append("{ \"predefined\": true, \"scenario\": \"此处填写场景标识（必须原样取自上方列表）\", \"complexity\": 1-5, \"highRisk\": true/false }\n\n");
+        sb.append("当未匹配到任何场景时（predefined=false）：\n");
+        sb.append("{ \"predefined\": false, \"complexity\": 1-5, \"highRisk\": true/false }\n");
+        sb.append("（注意：predefined=false 时绝对不能包含 scenario 字段）\n\n");
 
         return sb.toString();
     }
@@ -132,7 +131,7 @@ public class PromptManagerBuilder {
         sb.append("  例如：“如果销售下滑则生成应对方案，否则生成总结报告”。此时需要插入一个条件判断步骤（LLM_CALL），其输出决定后续跳转。\n");
         sb.append("- ITERATIVE_CORRECTION: 需要反复执行“执行→评估→修正”循环，直到满足某个质量标准。适合生成高质量内容或需要自我完善的场景。\n");
         sb.append("  可以定义多个独立的循环闭环，每个循环包含一组主步骤、一个评估步骤和一个可选的修正步骤。\n");
-        sb.append("- COMPETITIVE: 让多个 Agent 同时执行同一个任务，然后选择最优结果。\n");
+        sb.append("- COMPETITIVE: 让多个 Agent 同时执行同一个任务，然后选择最优结果。\n\n");
 
         // ========= 任务拆分原则 =========
         sb.append("【任务拆分规则】\n");
@@ -142,17 +141,17 @@ public class PromptManagerBuilder {
         sb.append("   - 正确: \"对用户的销售数据进行多维分析，输出趋势图和关键指标\"\n");
         sb.append("3. 如果某个步骤需要了解用户的原始意图，你必须将其完整放入 input.userQuery 字段。\n");
         sb.append("4. A2A_DELEGATE 步骤的 agent 字段必须是可用 Agent 列表中的名称，不能虚构。\n");
-        sb.append("5. 尽量将步骤数量控制少于或等于5个以内，除非任务确实很复杂可以在大于5个，但最多不能超过10个。\n\n");
+        sb.append("5. 尽量将步骤数量控制少于或等于5个以内，除非任务确实很复杂可以在大于5个，但最多不能超过10个。\n");
         sb.append("6. 步骤的 input 中如需引用前序步骤的输出，必须使用 {stepX.output} 格式的占位符，不要把前序步骤的完整输出直接写在 input 中。\n");
         sb.append("   示例：\"carData\": \"{step1.output}\" 而不是 \"carData\": \"（这里写几万字的完整分析报告）\"\n");
         sb.append("7. 如果某个步骤的 input 中已经包含了前序步骤的完整输出数据，那么该步骤的 task 应该描述如何处理这些数据，而不是重新获取或搜索相同的内容。\n");
         sb.append("   例如：如果 step2 已经输出了10款车型的口碑评价，step3 的 task 应为 \"根据已有的口碑评价精选2款最佳车型\"，而不是 \"搜索口碑评价\"。\n");
         sb.append("8. 必须确保每个步骤的 task 与其 input 中的数据相匹配，不要描述与 input 内容重复或冲突的动作。\n");
         sb.append("9. 如果某个 LLM_CALL 步骤需要结合用户之前的对话历史才能准确执行（例如“根据刚才讨论的内容进行总结”或“参考之前的对话回答”），\n");
-        sb.append("   请在 input 中设置 \"includeChatHistory\": true，否则不要包含此字段或设置为 false。\n\n");
+        sb.append("   请在 input 中设置 \"includeChatHistory\": true，否则不要包含此字段或设置为 false。\n");
         sb.append("10. 当使用 COMPETITIVE 模式时，同一竞争组内的不同竞争者必须使用不同的模型（model 字段），以保证方案多样性。\n");
-        sb.append("   每个竞争者可以是一个或多个步骤的串联（通过 stepIds 指定），评审步骤的 input 中应引用该组的聚合输出 {groupId.output}。\n\n");
-        sb.append("11. 建议所有 type 为 LLM_CALL 的步骤都显式指定 model 字段，从【可用大模型列表】中选择，以避免因默认模型变更导致执行结果不一致。\n");
+        sb.append("   每个竞争者可以是一个或多个步骤的串联（通过 stepIds 指定），评审步骤的 input 中应引用该组的聚合输出 {groupId.output}。\n");
+        sb.append("11. 建议所有 type 为 LLM_CALL 的步骤都显式指定 model 字段，从【可用大模型列表】中选择，以避免因默认模型变更导致执行结果不一致。\n\n");
 
 
         // ========= 条件分支 (CONDITIONAL) 规则 =========
@@ -173,30 +172,30 @@ public class PromptManagerBuilder {
         sb.append("【循环纠正 (ITERATIVE_CORRECTION) 规则】\n");
         sb.append("当 executionMode 为 ITERATIVE_CORRECTION 时，必须遵循以下规则：\n");
         // 1. 主步骤（只执行一次）
-        sb.append("1. 主步骤（firstStepId 指向的步骤）只执行一次，生成初始内容。该步骤不在循环内重复执行。\n\n");
+        sb.append("1. 主步骤（firstStepId 指向的步骤）只执行一次，生成初始内容。该步骤不在循环内重复执行。\n");
         // 2. 循环体组成
         sb.append("2. 循环体仅由评估步骤和纠正步骤组成：\n");
         sb.append("   - 评估步骤（evaluatorStepId）：对当前内容进行质量评分，输出 JSON 格式 {\"score\": 85, \"issues\": [\"问题1\"], \"suggestions\": [\"建议1\"]}。\n");
         sb.append("   - 纠正步骤（correctorStepId）：根据评估反馈，直接修改内容并输出完整的修改后版本。\n");
-        sb.append("   - 纠正步骤的 input 必须包含当前内容（通过 {主步骤ID.output} 引用）和评估反馈（通过 {评估步骤ID.output} 引用）。\n\n");
+        sb.append("   - 纠正步骤的 input 必须包含当前内容（通过 {主步骤ID.output} 引用）和评估反馈（通过 {评估步骤ID.output} 引用）。\n");
         // 3. 纠正步骤输出要求
-        sb.append("3. 纠正步骤必须输出修改后的完整内容，而非仅给出修改建议。执行引擎会自动用纠正步骤的输出覆盖主步骤的输出，使下一轮评估看到最新内容。\n\n");
+        sb.append("3. 纠正步骤必须输出修改后的完整内容，而非仅给出修改建议。执行引擎会自动用纠正步骤的输出覆盖主步骤的输出，使下一轮评估看到最新内容。\n");
         // 4. 数据流规则
         sb.append("4. 数据流与覆盖机制：\n");
         sb.append("   - 主步骤输出存入 {主步骤ID.output}。\n");
         sb.append("   - 评估步骤通过 {主步骤ID.output} 获取待评估内容。\n");
         sb.append("   - 纠正步骤通过 {主步骤ID.output} 获取原始内容，通过 {评估步骤ID.output} 获取评估反馈。\n");
-        sb.append("   - 纠正步骤执行后，其输出会覆盖 {主步骤ID.output}，使得下一轮评估自动获得纠正后的最新内容。\n\n");
+        sb.append("   - 纠正步骤执行后，其输出会覆盖 {主步骤ID.output}，使得下一轮评估自动获得纠正后的最新内容。\n");
         // 5. 循环终止
         sb.append("5. 循环终止条件（满足任一即退出）：\n");
         sb.append("   - 评分 >= qualityThreshold（达标）。\n");
         sb.append("   - 达到 maxIterations（超过最大迭代次数）。\n");
-        sb.append("   - 用户在检查点选择终止。\n\n");
+        sb.append("   - 用户在检查点选择终止。\n");
         // 6. 检查点语义（重要）
         sb.append("6. 检查点语义要求：\n");
         sb.append("   - 循环内检查点（checkpointAfterEachIteration=true 时）应使用询问语气，如“当前质量尚未达标，是否继续修正？”，不应预设质量已达标。\n");
         sb.append("   - 循环结束后检查点（无论达标还是达到最大次数）应使用中性确认语气，如“优化流程已结束，请确认是否接受当前结果？”。\n");
-        sb.append("   - 检查点必须依赖评估步骤（而非纠正步骤），以确保循环结束时无论是否执行纠正都能正确触发。\n\n");
+        sb.append("   - 检查点必须依赖评估步骤（而非纠正步骤），以确保循环结束时无论是否执行纠正都能正确触发。\n");
         // 7. 模型选择建议
         sb.append("7. 评估步骤和纠正步骤应尽量使用不同的模型以获得客观评价和有效修正。\n");
         sb.append("   - 评估步骤可指定 model 为 \"plusModelClient\"（更严格），纠正步骤可指定 model 为 \"reasoningModelClient\"（更强）。\n");
@@ -205,35 +204,35 @@ public class PromptManagerBuilder {
         // ========= 竞争执行 (COMPETITIVE) 规则（完整版） =========
         sb.append("【竞争执行 (COMPETITIVE) 规则】\n");
         sb.append("当 executionMode 为 COMPETITIVE 时，必须遵循以下规则：\n");
-        sb.append("1. 计划中必须包含 competitiveConfig，其中 groups 数组定义了一个或多个竞争组。\n\n");
+        sb.append("1. 计划中必须包含 competitiveConfig，其中 groups 数组定义了一个或多个竞争组。\n");
         sb.append("2. 每个竞争组包含：\n");
         sb.append("   - groupId: 竞争组唯一标识（如 \"group_analysis\"）。\n");
         sb.append("   - competitors: 竞争者列表，每个竞争者包含 competitorId 和 stepIds（该竞争者执行的步骤 ID 列表，按顺序执行）。\n");
         sb.append("   - selectorStepId: 该组的评审步骤 ID（必须在 steps 数组中定义）。\n");
-        sb.append("   - maxConcurrency（可选）: 最大并行竞争者数量。\n\n");
+        sb.append("   - maxConcurrency（可选）: 最大并行竞争者数量。\n");
         sb.append("3. 竞争前的共享步骤：\n");
         sb.append("   - 如果所有竞争者需要基于相同的数据进行分析，应在竞争组之前放置一个共享的普通步骤（如数据搜集），\n");
         sb.append("     然后所有竞争者都引用该共享步骤的输出（通过 {step_collect.output}）。\n");
-        sb.append("   - 不要在竞争组之前放置会被竞争者各自重复执行的步骤。\n\n");
+        sb.append("   - 不要在竞争组之前放置会被竞争者各自重复执行的步骤。\n");
         sb.append("4. 竞争者的步骤构成：\n");
         sb.append("   - 每个竞争者可以包含一个或多个步骤（stepIds 列表）。\n");
         sb.append("   - 竞争者内部步骤之间通过 dependsOn 声明执行顺序。\n");
         sb.append("   - 同一组内的不同竞争者必须使用不同的 LLM 模型（model 字段），以保证方案多样性。\n");
         sb.append("     模型必须从【可用大模型列表】中选择。\n");
-        sb.append("   - 竞争者的第一个步骤的 dependsOn 应包含共享步骤的 ID（如果存在共享步骤）。\n\n");
+        sb.append("   - 竞争者的第一个步骤的 dependsOn 应包含共享步骤的 ID（如果存在共享步骤）。\n");
         sb.append("5. 评审步骤的依赖声明（非常重要）：\n");
         sb.append("   - 评审步骤（selectorStepId）的 dependsOn 必须显式包含该组所有竞争者的最后步骤 ID。\n");
         sb.append("   - 如果竞争组中间有检查点（INTERRUPT 步骤），评审步骤的 dependsOn 也必须包含该检查点步骤 ID。\n");
         sb.append("   - 示例：竞争者A 的步骤为 [step_a1, step_a2]，竞争者B 的步骤为 [step_b1]，\n");
         sb.append("     竞争组中间有确认检查点 step_confirm，\n");
-        sb.append("     则评审步骤 step_judge 的 dependsOn 应为 [\"step_a2\", \"step_b1\", \"step_confirm\"]。\n\n");
+        sb.append("     则评审步骤 step_judge 的 dependsOn 应为 [\"step_a2\", \"step_b1\", \"step_confirm\"]。\n");
         sb.append("6. 评审步骤的输入（必须严格遵守）：\n");
         sb.append("   - 评审步骤的 input 中必须包含一个键名为 \"competitionResults\" 的字段。\n");
         sb.append("   - 该字段的值必须使用占位符 \"{groupId.output}\"，其中 groupId 必须与你在 competitiveConfig 中为该竞争组定义的实际 groupId 完全一致。\n");
         sb.append("   - 示例：若竞争组的 groupId 为 \"group_initial\"，则 input 中必须写：\n");
         sb.append("     \"competitionResults\": \"{group_initial.output}\"\n");
         sb.append("   - 执行引擎会在运行时自动将占位符替换为实际的聚合输出对象（格式如下方所述）。\n");
-        sb.append("   - 严禁手动拼接 JSON 字符串，只允许使用占位符。\n\n");
+        sb.append("   - 严禁手动拼接 JSON 字符串，只允许使用占位符。\n");
         sb.append("   - 聚合输出是一个对象，结构为：\n");
         sb.append("     {\n");
         sb.append("       \"competitor_A\": {\"competitorId\": \"A\", \"output\": { \"content\": \"...\" }},\n");
@@ -241,40 +240,40 @@ public class PromptManagerBuilder {
         sb.append("       ...\n");
         sb.append("     }\n");
         sb.append("   - 该对象中的键名 \"competitor_A\"、\"competitor_B\" 等对应竞争者的 competitorId。\n");
-        sb.append("   - 不要尝试引用单个竞争者的步骤输出（如 {step_analyze_1.output}），因为这些输出已被聚合到上述结构中。\n\n");
+        sb.append("   - 不要尝试引用单个竞争者的步骤输出（如 {step_analyze_1.output}），因为这些输出已被聚合到上述结构中。\n");
         sb.append("7. 多个竞争组按数组顺序依次执行，前一个组的评审结果（或优胜者输出）可以作为后一个组竞争者的输入。\n");
-        sb.append("   后一个组的竞争者应引用前一个组的评审步骤输出（通过 {step_judge.output}）。\n\n");
+        sb.append("   后一个组的竞争者应引用前一个组的评审步骤输出（通过 {step_judge.output}）。\n");
         sb.append("8. 评审步骤的输出格式要求：\n");
         sb.append("   - 评审步骤的 task 必须明确要求以 JSON 格式输出，且必须包含以下字段：\n");
         sb.append("     · winnerId: 获胜竞争者标识（如 \"A\"）\n");
         sb.append("     · selectedOutput: 获胜者的完整输出内容（即该竞争者最终步骤的输出原文，不可省略）\n");
         sb.append("     · reason: 选择理由（简要说明）\n");
         sb.append("     · score: 评分（可选）\n");
-        sb.append("   - 示例 task 描述：\"评审三份报告...以 JSON 格式输出：{\\\"winnerId\\\": \\\"A\\\", \\\"selectedOutput\\\": \\\"(获胜者的完整报告内容)\\\", \\\"reason\\\": \\\"...\\\", \\\"score\\\": 92}\"\n\n");
-        sb.append("   - 注意：检查点（INTERRUPT 步骤）的 checkpoint.question 中不要包含占位符（如 {stepX.output.score}），应直接用自然语言描述问题。具体的报告内容可通过检查点步骤的 input 字段传递给前端展示，不需要在 question 中呈现。\n");
+        sb.append("   - 示例 task 描述：\"评审三份报告...以 JSON 格式输出：{\\\"winnerId\\\": \\\"A\\\", \\\"selectedOutput\\\": \\\"(获胜者的完整报告内容)\\\", \\\"reason\\\": \\\"...\\\", \\\"score\\\": 92}\"\n");
+        sb.append("   - 注意：检查点（INTERRUPT 步骤）的 checkpoint.question 中不要包含占位符（如 {stepX.output.score}），应直接用自然语言描述问题。具体的报告内容可通过检查点步骤的 input 字段传递给前端展示，不需要在 question 中呈现。\n\n");
 
         // ========= 检查点规则（新增，融合到原有逻辑中） =========
         sb.append("【检查点（人工干预）规则】\n");
-        sb.append("你必须分析每个子任务的风险等级，判断是否需要插入 type=INTERRUPT 的步骤作为检查点，在关键操作前让用户确认或授权。\n\n");
+        sb.append("你必须分析每个子任务的风险等级，判断是否需要插入 type=INTERRUPT 的步骤作为检查点，在关键操作前让用户确认或授权。\n");
         sb.append("以下情况必须插入 CREDENTIAL 类型检查点（需要用户授权权限）：\n");
         sb.append("  - 访问敏感数据或受保护资源（如财务数据、医疗记录、用户隐私信息）\n");
         sb.append("  - 调用需要特殊权限的 API 或系统（如财务系统、CRM系统）\n");
-        sb.append("  - 示例：用户要求\"分析财务数据\"，在调用财务系统前插入授权检查点\n\n");
+        sb.append("  - 示例：用户要求\"分析财务数据\"，在调用财务系统前插入授权检查点\n");
         sb.append("以下情况必须插入 CONFIRM 类型检查点（需要用户确认操作）：\n");
         sb.append("  - 执行不可逆操作（如发送邮件、扣款、发布内容、删除数据）\n");
         sb.append("  - 关键决策点，需要用户确认中间结果（如生成正式报告、执行重要分析）\n");
         sb.append("  - 输出结果可能产生重大影响（如发送给老板的报告、对外发布的内容）\n");
-        sb.append("  - 示例：数据分析完成后，插入确认点让用户验证数据后再生成报告\n\n");
+        sb.append("  - 示例：数据分析完成后，插入确认点让用户验证数据后再生成报告\n");
         sb.append("以下情况不需要检查点：\n");
         sb.append("  - 纯信息查询（如\"介绍一下最新的AI技术\"）\n");
         sb.append("  - 简单的文本生成或格式转换\n");
-        sb.append("  - 用户明确表示\"直接执行\"或\"不需要确认\"\n\n");
-        sb.append("如果不需要人工干预，则不要插入 INTERRUPT 步骤。\n\n");
-        sb.append("  - 在循环纠正模式(ITERATIVE_CORRECTION)中，循环结束后的确认检查点应使用中性语气，如“优化流程已结束，请确认是否接受当前结果？”，避免暗示质量已达标。\n");
+        sb.append("  - 用户明确表示\"直接执行\"或\"不需要确认\"\n");
+        sb.append("如果不需要人工干预，则不要插入 INTERRUPT 步骤。\n");
+        sb.append("  - 在循环纠正模式(ITERATIVE_CORRECTION)中，循环结束后的确认检查点应使用中性语气，如“优化流程已结束，请确认是否接受当前结果？”，避免暗示质量已达标。\n\n");
 
         // ========= 可用的子agent能力清单 =========
         sb.append("=== 可用 Agent 能力清单 ===\n");
-        sb.append("以下是当前所有可用的 Agent，请严格根据它们的技能分配任务。\n\n");
+        sb.append("以下是当前所有可用的 Agent，请严格根据它们的技能分配任务。\n");
         int index = 1;
         for (AgentCardWrapper agent : agents) {
             sb.append("Agent ").append(index).append("：").append(agent.name()).append("\n");
@@ -307,7 +306,7 @@ public class PromptManagerBuilder {
         sb.append("请根据以下原则，从【可用大模型列表】中为每个 LLM_CALL 步骤选择最合适的模型：\n");
         sb.append("1. 优先使用本地模型处理简单、低延迟任务：意图识别、简单分类、关键词提取、轻量文本生成。本地模型无网络成本，响应极快。\n");
         sb.append("2. 一般推理、中等复杂度任务（如步骤规划、普通摘要、格式转换）可使用云端均衡模型（如 plusModelClient），速度快且成本适中。\n");
-        sb.append("3. 高难度推理、多步逻辑分析、方案评估择优、复杂报告生成等任务，必须使用云端推理模型（如 reasoningModelClient 或 MAIN_REASONING_MODEL）。\n");
+        sb.append("3. 高难度推理、多步逻辑分析、方案评估择优、复杂报告生成等任务，必须使用云端推理模型（如 reasoningModelClient）。\n");
         sb.append("4. 语音相关任务（如文本转语音）只能使用语音专用模型（如 qwenVoiceModelClient）。\n");
         sb.append("5. 对于同一个请求，尽量控制云端高成本模型的使用次数，除非任务确实需要。\n");
         sb.append("6. 在竞争模式中，竞争者应尽量选用不同特征（本地/云端、快/慢、通用/推理）的模型，以保证方案多样性。\n");
@@ -397,6 +396,7 @@ public class PromptManagerBuilder {
 
         // ========= 正确示例（覆盖五种执行模式） =========
         sb.append("【正确示例1：顺序执行（SEQUENTIAL）】\n");
+        sb.append("以下示例中的 Agent 名称仅为格式演示，实际生成的计划必须严格使用上方【可用 Agent 能力清单】中的名称，不得虚构。\n");
         sb.append("用户请求：\"帮我分析销售数据并生成报告\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
@@ -421,6 +421,7 @@ public class PromptManagerBuilder {
         sb.append("}\n\n");
 
         sb.append("【正确示例2：并行执行（PARALLEL）】\n");
+        sb.append("以下示例中的 Agent 名称仅为格式演示，实际生成的计划必须严格使用上方【可用 Agent 能力清单】中的名称，不得虚构。\n");
         sb.append("用户请求：\"同时搜集汽车信息、用户评价和保险政策\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
@@ -459,6 +460,7 @@ public class PromptManagerBuilder {
         sb.append("}\n\n");
 
         sb.append("【正确示例3：条件分支（CONDITIONAL）】\n");
+        sb.append("以下示例中的 Agent 名称仅为格式演示，实际生成的计划必须严格使用上方【可用 Agent 能力清单】中的名称，不得虚构。\n");
         sb.append("用户请求：\"分析销售数据，如果下滑就生成应对方案，否则生成总结报告\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
@@ -516,6 +518,7 @@ public class PromptManagerBuilder {
         sb.append("}\n\n");
 
         sb.append("【正确示例4：包含检查点的敏感任务】\n");
+        sb.append("以下示例中的 Agent 名称仅为格式演示，实际生成的计划必须严格使用上方【可用 Agent 能力清单】中的名称，不得虚构。\n");
         sb.append("用户请求：\"帮我分析财务数据并发送报告给老板\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
@@ -566,6 +569,8 @@ public class PromptManagerBuilder {
         sb.append("}\n\n");
 
         sb.append("【正确示例5：多循环纠正（含检查点）】\n");
+        sb.append("以下示例中的 Agent 名称仅为格式演示，实际生成的计划必须严格使用上方【可用 Agent 能力清单】中的名称，不得虚构。\n");
+        sb.append("以下示例中的 qualityThreshold 和 maxIterations 仅为格式演示。实际生成计划时，必须严格根据用户请求中明确指定的标准（如“数据质量评分达到99分”）来设置阈值。若用户未指定，则使用默认合理值，例如 85。\n");
         sb.append("用户请求：\"生成一份高质量的市场分析报告。先确保搜集的数据足够全面准确，再确保报告分析深入、格式专业。每轮优化后让我确认是否继续。\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
@@ -603,6 +608,7 @@ public class PromptManagerBuilder {
         sb.append("}\n\n");
 
         sb.append("【正确示例6：竞争执行（COMPETITIVE）】\n");
+        sb.append("以下示例中的 Agent 名称仅为格式演示，实际生成的计划必须严格使用上方【可用 Agent 能力清单】中的名称，不得虚构。\n");
         sb.append("用户请求：\"生成一份市场分析报告，我需要多个不同的方案供选择，然后由评审模型选出最优的一份。\"\n");
         sb.append("输出 JSON：\n");
         sb.append("{\n");
@@ -716,6 +722,8 @@ public class PromptManagerBuilder {
         sb.append("   - 条件判断步骤应使用快速模型（本地或云端轻量），避免不必要的延迟。\n");
         sb.append("   - 同一计划内应尽量减少不必要的模型切换，保持一致性。\n\n");
 
+        sb.append("9. 非适用维度评分规则：若候选计划未采用竞争模式（COMPETITIVE），则 competitiveDesign 维度自动评 10 分；若未采用循环纠正模式（ITERATIVE_CORRECTION），则 correctionEffectiveness 维度自动评 10 分。此类维度视为“不适用，无缺陷”，满分通过。\n\n");
+
         // 紧接在【评估标准】之前或之后
         sb.append("=== 可用大模型列表（供评估参考） ===\n");
         chatClientSelector.getAvailableModelNames()
@@ -766,6 +774,8 @@ public class PromptManagerBuilder {
         sb.append("  },\n");
         sb.append("  \"reason\": \"选择该候选的简要理由\"\n");
         sb.append("}");
+
+        sb.append("\n\n");
         sb.append("请注意：评估时必须仔细检查每个步骤的 model 字段是否与任务匹配，参考上方可用模型列表中的能力描述。\n");
         sb.append("特别注意：你必须直接输出纯 JSON 字符串，不要使用 ```json 代码块包裹，不要添加任何解释文字或 Markdown 标记。\n");
         sb.append("直接输出 JSON，不要包含任何额外文字、注释或 Markdown 标记。");

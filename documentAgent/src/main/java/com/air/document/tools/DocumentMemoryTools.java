@@ -8,11 +8,6 @@ import com.air.api.feignClient.MemoryIdentityFeign;
 import com.air.api.feignClient.MemoryKnowledgeFeign;
 import com.air.api.feignClient.MemoryPreferenceFeign;
 import com.air.api.feignClient.MemoryProfileFeign;
-import com.air.platform.common.a2a.enums.A2AMessageType;
-import com.air.platform.common.a2a.protocol.A2AMessage;
-import com.air.platform.common.a2a.protocol.A2AResponse;
-import com.air.platform.common.a2a.router.NacosA2ARouter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -20,11 +15,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class DocumentMemoryTools {
 
     private final MemoryIdentityFeign memoryIdentityFeign;
@@ -32,8 +25,15 @@ public class DocumentMemoryTools {
     private final MemoryKnowledgeFeign memoryKnowledgeFeign;
     private final MemoryPreferenceFeign memoryPreferenceFeign;
 
-    /**注入平台自定义的a2aRouter**/
-    private final NacosA2ARouter a2aRouter;
+    public DocumentMemoryTools(MemoryIdentityFeign memoryIdentityFeign,
+                               MemoryProfileFeign memoryProfileFeign,
+                               MemoryKnowledgeFeign memoryKnowledgeFeign,
+                               MemoryPreferenceFeign memoryPreferenceFeign) {
+        this.memoryIdentityFeign = memoryIdentityFeign;
+        this.memoryProfileFeign = memoryProfileFeign;
+        this.memoryKnowledgeFeign = memoryKnowledgeFeign;
+        this.memoryPreferenceFeign = memoryPreferenceFeign;
+    }
 
     //----------------------------调用Memory服务的tools集合--------------------------------//
     @Tool(description = "获取用户身份信息")
@@ -58,33 +58,6 @@ public class DocumentMemoryTools {
 
 
     //----------------------------调用AnalysisAgent服务的tools集合--------------------------------//
-    @Tool(description = "调用 analysis-agent 进行数据或文本分析，返回分析结果")
-    public String callAnalysisAgent(
-            @ToolParam(description = "需要分析的内容或数据") String content,
-            @ToolParam(description = "分析类型，如 sentiment/trend/summary") String analysisType) {
-        try {
-            A2AMessage message = A2AMessage.builder()
-                    .senderAgentId("document-agent")
-                    .receiverAgentId("analysis-agent")     // 目标子 Agent 的服务名
-                    .messageType(A2AMessageType.TASK_DELEGATION)
-                    .payload(Map.of(
-                            "taskId", UUID.randomUUID().toString(),
-                            "taskType", analysisType,
-                            "payload", Map.of("content", content)
-                    ))
-                    .build();
-            // 2. 构建发送参数
-            A2AResponse a2AResponse = a2aRouter.routeMessage(message);
-
-            if (A2AResponse.ResponseStatus.SUCCESS.equals(a2AResponse.getStatus())) {
-                return a2AResponse.getPayload().toString();
-            } else {
-                return "分析失败: " + a2AResponse.getErrorMessage();
-            }
-        } catch (Exception e) {
-            return "调用分析 Agent 出错: " + e.getMessage();
-        }
-    }
 
 
 }

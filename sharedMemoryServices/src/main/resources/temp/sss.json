@@ -1,0 +1,91 @@
+{
+  "mode": "DYNAMIC",
+  "steps": [
+    {
+      "id": "step_auth",
+      "task": "请求用户授权访问财务系统",
+      "type": "INTERRUPT",
+      "input": {
+        "userQuery": "帮我分析Q3的财务数据，生成一份审计报告。在访问财务系统之前需要我的授权，生成报告后也要我确认才能发送给老板。"
+      },
+      "retry": 0,
+      "dependsOn": [],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "checkpoint": {
+        "type": "CREDENTIAL",
+        "question": "即将访问Q3财务敏感数据，需要您的授权",
+        "requiredScopes": [
+          "financial_read"
+        ],
+        "timeoutMinutes": 30
+      },
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_analyze",
+      "task": "提取并分析Q3财务数据，包括收入、成本、利润、现金流等关键指标，识别异常项和风险点，输出结构化审计发现",
+      "type": "LLM_CALL",
+      "input": {
+        "userQuery": "帮我分析Q3的财务数据，生成一份审计报告。在访问财务系统之前需要我的授权，生成报告后也要我确认才能发送给老板。"
+      },
+      "model": "reasoningModelClient",
+      "retry": 0,
+      "dependsOn": [
+        "step_auth"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_report",
+      "task": "基于Q3财务分析结果生成专业审计报告，包含执行摘要、关键发现、风险评级和改进建议，符合内部审计格式规范",
+      "type": "A2A_DELEGATE",
+      "agent": "document-agent",
+      "input": {
+        "userQuery": "帮我分析Q3的财务数据，生成一份审计报告。在访问财务系统之前需要我的授权，生成报告后也要我确认才能发送给老板。",
+        "analysisData": "{step_analyze.output}"
+      },
+      "retry": 0,
+      "dependsOn": [
+        "step_analyze"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_confirm_send",
+      "task": "确认是否将审计报告发送给老板",
+      "type": "INTERRUPT",
+      "input": {
+        "report": "{step_report.output}",
+        "userQuery": "帮我分析Q3的财务数据，生成一份审计报告。在访问财务系统之前需要我的授权，生成报告后也要我确认才能发送给老板。"
+      },
+      "retry": 0,
+      "dependsOn": [
+        "step_report"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "checkpoint": {
+        "type": "CONFIRM",
+        "question": "审计报告已生成，请确认是否发送给老板？",
+        "timeoutMinutes": 30
+      },
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    }
+  ],
+  "planId": "5a4340a1-c6a6-4a87-8b40-bde39184ea45",
+  "executionMode": "SEQUENTIAL",
+  "relationRequestId": "0fa3f7f7-0cf7-4ae2-b3c0-85c3ba64000d"
+}

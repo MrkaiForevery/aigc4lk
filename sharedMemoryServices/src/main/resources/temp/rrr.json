@@ -1,0 +1,15 @@
+{
+  "output": {
+    "question": "即将访问Q3财务敏感数据，需要您的授权"
+  },
+  "stepId": "step_auth",
+  "command": {
+    "type": "REQUEST_CREDENTIAL",
+    "message": "即将访问Q3财务敏感数据，需要您的授权",
+    "requiredScopes": [
+      "financial_read"
+    ]
+  },
+  "success": false,
+  "durationMs": 0
+}

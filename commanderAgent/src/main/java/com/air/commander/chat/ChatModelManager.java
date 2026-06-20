@@ -4,6 +4,9 @@ import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -13,6 +16,15 @@ import org.springframework.ai.ollama.api.OllamaChatOptions;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.reactive.function.client.WebClient;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 /**
  * chatModel 模型注入
@@ -29,12 +41,47 @@ public class ChatModelManager {
         this.configLoader = loader;
     }
 
+    //--------------------------超时设置注入-----------------------//
+    @Bean("cloudRestClientBuilder")
+    @Primary
+    public RestClient.Builder cloudRestClientBuilder() {
+        // 创建一个底层 HttpRequestFactory，设置超时时间（单位：毫秒）
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(10000);       // 连接超时 10秒
+        requestFactory.setReadTimeout(Duration.ofMinutes(7).toMillisPart()); // 读取超时 7分钟（根据模型调整）
+
+        return RestClient.builder()
+                .requestFactory(requestFactory);
+    }
+
+    @Bean("a2aRestClientBuilder")
+    public RestClient.Builder a2aRestClientBuilder() {
+        // 创建一个底层 HttpRequestFactory，设置超时时间（单位：毫秒）
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(10000);       // 连接超时 10秒
+        requestFactory.setReadTimeout(Duration.ofMinutes(10).toMillisPart()); // 读取超时 10分钟（根据模型调整）
+
+        return RestClient.builder()
+                .requestFactory(requestFactory);
+    }
+
+    @Bean("localRestClientBuilder")
+    public RestClient.Builder localRestClientBuilder() {
+        // 创建一个底层 HttpRequestFactory，设置超时时间（单位：毫秒）
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(10000);       // 连接超时 10秒
+        requestFactory.setReadTimeout(Duration.ofMinutes(3).toMillisPart()); // 读取超时 3分钟（根据模型调整）
+
+        return RestClient.builder()
+                .requestFactory(requestFactory);
+    }
 
     //--------------------------云端大模型注入-----------------------//
     @Bean
-    public DashScopeApi dashScopeApi() {
+    public DashScopeApi dashScopeApi(@Qualifier("cloudRestClientBuilder") RestClient.Builder cloudRestClientBuilder) {
         return DashScopeApi.builder()
                 .apiKey(configLoader.getChatModelApiKey(QWEN))
+                .restClientBuilder(cloudRestClientBuilder)
                 .build();
     }
 
@@ -43,8 +90,9 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportChatModeType.QWEN_FAST.getModelName())
-                        .withTemperature(0.5)
+                        .model(SupportChatModeType.QWEN_FAST.getModelName())
+                        .multiModel(true)
+                        .temperature(0.5)
                         .build())
                 .build();
     }
@@ -59,8 +107,8 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportChatModeType.MAIN_REASONING_MODEL.getModelName())
-                        .withTemperature(0.3)
+                        .model(SupportChatModeType.MAIN_REASONING_MODEL.getModelName())
+                        .temperature(0.3)
                         .build())
                 .build();
     }
@@ -75,8 +123,9 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportChatModeType.QWEN_PLUS.getModelName())
-                        .withTemperature(0.4)
+                        .model(SupportChatModeType.QWEN_PLUS.getModelName())
+                        .multiModel(true)
+                        .temperature(0.4)
                         .build())
                 .build();
     }
@@ -92,8 +141,9 @@ public class ChatModelManager {
         return DashScopeChatModel.builder()
                 .dashScopeApi(api)
                 .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(SupportChatModeType.QWEN_VOICE.getModelName())
-                        .withTemperature(0.3)
+                        .model(SupportChatModeType.QWEN_VOICE.getModelName())
+                        .multiModel(true)
+                        .temperature(0.5)
                         .build())
                 .build();
     }
@@ -106,9 +156,11 @@ public class ChatModelManager {
     //--------------------------本地大模型注入-----------------------//
 
     @Bean
-    public OllamaApi localOllamaApi() {
+    public OllamaApi localOllamaApi(@Qualifier("localRestClientBuilder") RestClient.Builder localRestClientBuilder) {
+
         return OllamaApi.builder()
                 .baseUrl("http://localhost:11434")
+                .restClientBuilder(localRestClientBuilder)
                 .build();
     }
 
@@ -140,7 +192,7 @@ public class ChatModelManager {
                 .build();
     }
 
-    @Bean("localOllamaDeepseekModelClient")
+    @Bean("localOllamaQwen2ModelClient")
     public ChatClient localOllamaQwen2ModelClient(@Qualifier("localOllamaQwen2Model") OllamaChatModel localOllamaQwen2Model) {
         return ChatClient.builder(localOllamaQwen2Model).build();
     }
