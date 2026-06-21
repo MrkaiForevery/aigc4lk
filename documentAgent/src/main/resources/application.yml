@@ -8,6 +8,7 @@ spring:
     import:
       - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
       - nacos:document-agent-remote-mcp.yaml?refreshEnabled=true&group=DOCUMENT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+      - nacos:document-agent-skill-properties.yaml?refreshEnabled=true&group=DOCUMENT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
   cloud:
     nacos:
       # Nacos 服务发现配置
@@ -45,64 +46,10 @@ spring:
             enabled: true
         server:
           version: 0.0.1
-          card:
-            name: document-agent    # 必须和 @Bean name 一致
-            description: 文档生成智能体
-            skills:
-              - id: document_generation
-                name: 文档生成
-                description: 根据用户需求生成高质量的结构化文档，支持技术报告、分析报告、会议纪要等多种类型
-                tags:
-                  - document
-                  - generation
-                  - writing
-                examples:
-                  - 生成一份关于 Spring AI 的技术报告
-                  - 写一篇市场分析报告
+#          card:
+#            name: document-agent    # 必须和 @Bean name 一致
+#            description: 文档生成智能体
 
-              - id: profile_awareness
-                name: 用户画像感知
-                description: 根据用户画像（技术等级、沟通风格、偏好设置）自动调整文档风格和深度
-                tags:
-                  - profile
-                  - personalization
-                  - adaptation
-
-              - id: knowledge_retrieval
-                name: 知识库检索
-                description: 从共享知识库中通过向量语义搜索检索相关历史知识和参考文档，辅助文档生成
-                tags:
-                  - knowledge
-                  - search
-                  - rag
-
-              - id: multi_turn_collaboration
-                name: 多轮协作
-                description: 支持多轮对话，根据用户反馈迭代优化文档内容，包括修改、扩展、缩减和重写
-                tags:
-                  - collaboration
-                  - multi-turn
-                  - iteration
-
-              - id: cross_agent_collaboration
-                name: 跨Agent协作
-                description: 可调用其他子Agent（如数据分析Agent）获取辅助数据，通过A2A协议通信
-                tags:
-                  - a2a
-                  - multi-agent
-                  - delegation
-
-              - id: output_formatting
-                name: 输出格式化
-                description: 支持输出多种格式的文档，包括 Markdown、纯文本、结构化 JSON
-                tags:
-                  - formatting
-                  - output
-
-            provider:
-              name: lk
-              organization: "air.com"
-              url: "https://www.air.com"
     mcp:
       client:
         enabled: false  # 禁用 MCP 客户端自动配置 todo 临时禁止

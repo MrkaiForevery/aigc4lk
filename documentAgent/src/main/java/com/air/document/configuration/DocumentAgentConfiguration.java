@@ -2,12 +2,15 @@ package com.air.document.configuration;
 
 import com.air.document.config.ChatModelApiKeyConfig;
 import com.air.document.mcp.RemoteMcpToolProvider;
+import com.air.document.skills.AgentSkillsProperties;
+import com.air.document.skills.SkillDocumentLoader;
 import com.air.document.tools.DocumentMemoryTools;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -24,6 +27,11 @@ public class DocumentAgentConfiguration {
     // 手动构造器，只注入配置属性类
     public DocumentAgentConfiguration(ChatModelApiKeyConfig chatModelApiKeyConfig) {
         this.chatModelApiKeyConfig = chatModelApiKeyConfig;
+    }
+
+    @PostConstruct
+    public void init(){
+        log.info("初始化DocumentAgentConfiguration成功！");
     }
 
     @Bean
@@ -53,8 +61,20 @@ public class DocumentAgentConfiguration {
     public ReactAgent documentAgent(
             ChatModel chatModel,
             DocumentMemoryTools documentMemoryTools,
-            RemoteMcpToolProvider remoteMcpToolProvider
-    ) {
+            AgentSkillsProperties skillsProperties,
+            SkillDocumentLoader skillDocumentLoader,
+            RemoteMcpToolProvider remoteMcpToolProvider) {
+
+        // 动态构建描述，包含技能详情
+        StringBuilder fullDescription = new StringBuilder(skillsProperties.getDescription());
+        for (var sc : skillsProperties.getSkills()) {
+            fullDescription.append("\n技能：").append(sc.getSkillId())
+                    .append(" - ").append(sc.getDescription());
+            String doc = skillDocumentLoader.loadSkillDocument(sc.getSkillId());
+            if (!doc.isEmpty()) {
+                fullDescription.append("\n").append(doc);
+            }
+        }
 
         // 将自己内部服务的工具对象包装为 ToolCallbackProvider
         ToolCallbackProvider documentToolProvider = MethodToolCallbackProvider.builder()
@@ -62,9 +82,9 @@ public class DocumentAgentConfiguration {
                 .build();
 
         return ReactAgent.builder()
-                .name("documentGenerationAgent")
+                .name("document-agent")
                 .model(chatModel)
-                .description("文档生成智能体")
+                .description(fullDescription.toString())
                 .instruction("""
                         你是一个专业的文档生成智能体。
                         
