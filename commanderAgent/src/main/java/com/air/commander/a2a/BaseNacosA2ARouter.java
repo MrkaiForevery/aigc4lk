@@ -327,30 +327,30 @@ public class BaseNacosA2ARouter {
      * 从后往前扫描，找到最后一条包含 "artifact-update" 的 JSON 行
      */
     private String findLastArtifact(String responseBody) {
-        int endIndex = responseBody.length();
-        int lineEnd = endIndex;
+        String lastArtifactData = null;
 
-        while (lineEnd > 0) {
-            // 找上一行结束位置
-            int lineStart = responseBody.lastIndexOf('\n', lineEnd - 1);
-            if (lineStart == -1) {
-                lineStart = 0;
-            } else {
-                lineStart += 1; // 跳过 '\n'
-            }
+        // 1. 用换行符分割整个响应
+        String[] lines = responseBody.split("\n");
+        StringBuilder currentEvent = new StringBuilder();
 
-            String line = responseBody.substring(lineStart, lineEnd).trim();
+        for (String line : lines) {
             if (line.startsWith("data:")) {
-                String json = line.substring(5).trim(); // 去掉 "data:"
-                if (json.contains("\"kind\":\"artifact-update\"")) {
-                    return json; // 找到最后一条，直接返回
+                // 2. 把 "data:" 后面的 JSON 数据累积起来
+                currentEvent.append(line.substring(5));
+            } else {
+                // 3. 遇到非"data:"开头的行（比如空行），说明一个事件块结束了
+                if (currentEvent.length() > 0) {
+                    String eventData = currentEvent.toString();
+                    // 4. 检查这个事件块里有没有 artifact-update
+                    if (eventData.contains("\"kind\":\"artifact-update\"")) {
+                        lastArtifactData = eventData; // 更新最后一个 artifact-update
+                    }
+                    currentEvent = new StringBuilder(); // 清空，准备下一个事件
                 }
             }
-
-            lineEnd = lineStart - 1; // 移到上一行末尾
-            if (lineEnd < 0) break;
         }
-        return null;
+
+        return lastArtifactData;
     }
 
     /**

@@ -10,7 +10,7 @@ import java.util.List;
 @Data
 @Component
 @RefreshScope
-@ConfigurationProperties(prefix = "documentAgent")
+@ConfigurationProperties(prefix = "document-agent")
 public class AgentSkillsProperties {
     private String name;
     private String description;

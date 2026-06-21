@@ -10,6 +10,9 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
+import io.netty.channel.ChannelOption;
+import io.netty.handler.timeout.ReadTimeoutHandler;
+import io.netty.handler.timeout.WriteTimeoutHandler;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
@@ -17,6 +20,11 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
+
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Configuration
@@ -29,16 +37,24 @@ public class DocumentAgentConfiguration {
         this.chatModelApiKeyConfig = chatModelApiKeyConfig;
     }
 
-    @PostConstruct
-    public void init(){
-        log.info("初始化DocumentAgentConfiguration成功！");
-    }
 
     @Bean
     public DashScopeApi dashScopeApi() {
+        // 创建支持长超时的 HttpClient
+        reactor.netty.http.client.HttpClient httpClient = HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000) // 连接超时 10 秒
+                .doOnConnected(conn ->
+                        conn.addHandlerLast(new ReadTimeoutHandler(5, TimeUnit.MINUTES)) // 读取超时 5 分钟
+                                .addHandlerLast(new WriteTimeoutHandler(30, TimeUnit.SECONDS)) // 写超时 30 秒
+                );
+
+        WebClient.Builder webClientBuilder = WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(httpClient));
+
         String dashScopeApiKey = chatModelApiKeyConfig.getApiKey().get("qwen");
         return DashScopeApi.builder()
                 .apiKey(dashScopeApiKey)
+                .webClientBuilder(webClientBuilder)
                 .build();
     }
 
@@ -61,20 +77,7 @@ public class DocumentAgentConfiguration {
     public ReactAgent documentAgent(
             ChatModel chatModel,
             DocumentMemoryTools documentMemoryTools,
-            AgentSkillsProperties skillsProperties,
-            SkillDocumentLoader skillDocumentLoader,
             RemoteMcpToolProvider remoteMcpToolProvider) {
-
-        // 动态构建描述，包含技能详情
-        StringBuilder fullDescription = new StringBuilder(skillsProperties.getDescription());
-        for (var sc : skillsProperties.getSkills()) {
-            fullDescription.append("\n技能：").append(sc.getSkillId())
-                    .append(" - ").append(sc.getDescription());
-            String doc = skillDocumentLoader.loadSkillDocument(sc.getSkillId());
-            if (!doc.isEmpty()) {
-                fullDescription.append("\n").append(doc);
-            }
-        }
 
         // 将自己内部服务的工具对象包装为 ToolCallbackProvider
         ToolCallbackProvider documentToolProvider = MethodToolCallbackProvider.builder()
@@ -84,10 +87,10 @@ public class DocumentAgentConfiguration {
         return ReactAgent.builder()
                 .name("document-agent")
                 .model(chatModel)
-                .description(fullDescription.toString())
+                .description("文档处理专家智能体")
                 .instruction("""
                         你是一个专业的文档生成智能体。
-                        
+
                         ## 任务信息
                         你会收到一个包含以下字段的 JSON：
                         - taskType: 任务类型
@@ -95,19 +98,19 @@ public class DocumentAgentConfiguration {
                         - userId: 用户标识
                         - sessionId: 会话标识
                         - docType: 文档类型
-                        
+
                         ## 任务流程
                         1. 从输入中提取 userId，调用 getProfile(userId) 获取用户画像
                         2. 调用 getPreference(userId) 获取用户偏好
                         3. 调用 searchKnowledge(topic) 搜索相关知识
                         4. 根据获取的信息生成文档
-                        
+
                         ## 兜底策略
                         - 如果 getProfile 返回空或失败，使用默认：技术等级=中级，沟通风格=专业
                         - 如果 getPreference 返回空或失败，使用默认：输出风格=详细
                         - 如果 searchKnowledge 返回空或失败，基于你自己的知识生成
                         - 如果所有工具都失败，直接用默认设置生成文档，不要反复重试
-                        
+
                         ## 行为准则
                         - 不要编造 userId，使用输入中提供的真实 userId
                         - 不要在回复中询问用户"是否继续"或"请提供更多信息"

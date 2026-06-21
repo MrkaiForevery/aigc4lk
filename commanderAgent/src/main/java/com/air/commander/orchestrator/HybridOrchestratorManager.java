@@ -279,7 +279,8 @@ public class HybridOrchestratorManager {
                             .stepId(result.getStepId())
                             .success(result.isSuccess())
                             .executionStatus(result.getExecutionStatus())
-                            .output(Map.of("summary", "Step completed")) // 或直接 .output(null)
+                            .output(Map.of("summary", "Step completed",
+                                    "content",result.getOutput().get("content")))
                             .durationMs(result.getDurationMs())
                             .error(result.getError())  // 如果有错误，保留错误信息
                             .build();
