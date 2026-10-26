@@ -27,6 +27,7 @@
         <module>codeReviewAgent</module>
         <module>customerServiceAgent</module>
         <module>imageAnalysisAgent</module>
+        <module>mcpGatewaySevice</module>
     </modules>
 
     <properties>
