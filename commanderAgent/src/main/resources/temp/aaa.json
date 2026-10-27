@@ -1,0 +1,212 @@
+{
+  "planId": "719a61c4-7677-4c5c-80da-5743c1bc4623",
+  "executionMode": "ITERATIVE_CORRECTION",
+  "steps": [
+    {
+      "id": "step_collect_data",
+      "type": "LLM_CALL",
+      "task": "从多个权威来源搜集最新市场数据，并进行初步清洗和整合",
+      "model": "reasoningModelClient",
+      "input": {
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_eval_data",
+      "type": "LLM_CALL",
+      "task": "评估当前市场数据的质量，输出JSON格式：{\"score\": 分数, \"issues\": [\"问题列表\"]}",
+      "model": "plusModelClient",
+      "input": {
+        "data": "{step_collect_data.output}",
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [
+        "step_collect_data"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_fix_data",
+      "type": "LLM_CALL",
+      "task": "根据评估反馈，重新搜集或修正市场数据，并输出完整的修改后数据",
+      "model": "reasoningModelClient",
+      "input": {
+        "data": "{step_collect_data.output}",
+        "feedback": "{step_eval_data.output}",
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [
+        "step_eval_data"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_confirm_data_loop",
+      "type": "INTERRUPT",
+      "task": "数据质量优化循环结束，确认是否继续生成报告",
+      "input": {
+        "data": "{step_collect_data.output}",
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [
+        "step_eval_data"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "checkpoint": {
+        "type": "CONFIRM",
+        "question": "数据优化流程已结束，请确认是否继续生成报告？",
+        "timeoutMinutes": 30
+      },
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_draft_report",
+      "type": "A2A_DELEGATE",
+      "agent": "document-agent",
+      "task": "基于已验证的高质量市场数据，撰写一份专业的市场分析报告初稿",
+      "input": {
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。",
+        "marketData": "{step_collect_data.output}"
+      },
+      "dependsOn": [
+        "step_confirm_data_loop"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_eval_report",
+      "type": "LLM_CALL",
+      "task": "评估市场分析报告初稿的质量，输出JSON格式：{\"score\": 分数, \"issues\": [\"问题列表\"], \"suggestions\": [\"建议列表\"]}",
+      "model": "plusModelClient",
+      "input": {
+        "report": "{step_draft_report.output}",
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [
+        "step_draft_report"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_confirm_fix_report",
+      "type": "INTERRUPT",
+      "task": "报告未达标，确认是否执行修正",
+      "input": {
+        "evaluation": "{step_eval_report.output}",
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [
+        "step_eval_report"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "checkpoint": {
+        "type": "CONFIRM",
+        "question": "当前报告质量尚未达标，是否继续修正？",
+        "timeoutMinutes": 30
+      },
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_fix_report",
+      "type": "LLM_CALL",
+      "task": "根据评估反馈直接修改报告内容，输出完整的修改后报告全文",
+      "model": "reasoningModelClient",
+      "input": {
+        "report": "{step_draft_report.output}",
+        "feedback": "{step_eval_report.output}",
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [
+        "step_confirm_fix_report"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    },
+    {
+      "id": "step_final_confirm",
+      "type": "INTERRUPT",
+      "task": "确认最终报告结果",
+      "input": {
+        "report": "{step_draft_report.output}",
+        "userQuery": "生成一份高质量的市场分析报告。先搜集最新市场数据，必须确保数据质量评分达到99分才算合格，否则自动修正数据直到达标。数据达标后，需要我确认是否继续生成报告。然后基于已达标的数据撰写报告初稿，报告质量评分必须达到85分才算合格，否则自动修正直到达标。每轮修正前都要我确认是否执行修正。最终报告达标后，需要我确认是否满意。"
+      },
+      "dependsOn": [
+        "step_eval_report"
+      ],
+      "mandatory": false,
+      "timeoutMs": 0,
+      "retry": 0,
+      "checkpoint": {
+        "type": "CONFIRM",
+        "question": "报告优化流程已结束，请确认是否接受当前结果？",
+        "timeoutMinutes": 30
+      },
+      "includeChatHistory": false,
+      "competitiveSelectorStepFlag": false,
+      "iterativeCorrectionStepFlag": false
+    }
+  ],
+  "correctionConfig": {
+    "loops": [
+      {
+        "loopId": "data_quality_loop",
+        "firstStepId": "step_collect_data",
+        "evaluatorStepId": "step_eval_data",
+        "correctorStepId": "step_fix_data",
+        "maxIterations": 5,
+        "qualityThreshold": 99,
+        "checkpointAfterEachIteration": false,
+        "checkpointOnMaxIterations": true
+      },
+      {
+        "loopId": "report_quality_loop",
+        "firstStepId": "step_draft_report",
+        "evaluatorStepId": "step_eval_report",
+        "correctorStepId": "step_fix_report",
+        "maxIterations": 3,
+        "qualityThreshold": 85,
+        "checkpointAfterEachIteration": true,
+        "checkpointOnMaxIterations": true
+      }
+    ]
+  }
+}
