@@ -1,7 +1,7 @@
 package com.air.mcp.gateway.registry;
 
-import com.air.mcp.gateway.annotation.McpPromptMeta;
-import org.springaicommunity.mcp.annotation.McpPrompt;
+import com.air.mcp.gateway.annotation.CustomerMcpPromptMeta;
+import org.springframework.ai.mcp.annotation.McpPrompt;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.stereotype.Component;
@@ -29,7 +29,7 @@ public class McpBizPromptsRegistry implements BeanPostProcessor {
         ReflectionUtils.doWithMethods(targetClass, method -> {
             McpPrompt mcpPrompt = method.getAnnotation(McpPrompt.class);
             if (mcpPrompt != null) {
-                McpPromptMeta meta = method.getAnnotation(McpPromptMeta.class);
+                CustomerMcpPromptMeta meta = method.getAnnotation(CustomerMcpPromptMeta.class);
                 if (meta == null) {
                     throw new IllegalStateException("启动失败：工具 " + mcpPrompt.name() + " 缺失 @McpPromptMeta 标签！");
                 }

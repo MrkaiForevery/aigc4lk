@@ -6,7 +6,6 @@ import com.air.commander.memory.MemoryContextBuilder;
 import com.air.commander.memory.MemoryUpdatePipeline;
 import com.air.commander.model.*;
 import com.air.commander.quality.QualityAssessor;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.seata.core.context.RootContext;
 import io.seata.spring.annotation.GlobalTransactional;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +14,7 @@ import org.apache.seata.core.exception.TransactionException;
 import org.apache.seata.tm.api.GlobalTransactionContext;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -39,7 +39,7 @@ public class HybridOrchestratorManager {
     private final MemoryUpdatePipeline memoryUpdatePipeline;
     private final QualityAssessor qualityAssessor;
     private final RedissonClient redissonClient;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     @GlobalTransactional(timeoutMills = 1800000)
     public ExecutionPlan execute(ExecuteRequest request) {

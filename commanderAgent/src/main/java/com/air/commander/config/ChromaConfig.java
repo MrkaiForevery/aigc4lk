@@ -2,7 +2,6 @@ package com.air.commander.config;
 
 import com.air.commander.configloader.loader.RemoteConfigLoader;
 import com.air.commander.configloader.properties.ChromaDbClientProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chroma.vectorstore.ChromaApi;
@@ -16,6 +15,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Optional;
 
@@ -36,7 +36,7 @@ public class ChromaConfig {
     public EmbeddingModel localOllamaEmbeddingModel(OllamaApi localOllamaApi) {
         return OllamaEmbeddingModel.builder()
                 .ollamaApi(localOllamaApi)
-                .defaultOptions(OllamaEmbeddingOptions.builder()
+                .options(OllamaEmbeddingOptions.builder()
                         .model(NOMIC_EMBED_TEXT)
                         .build())
                 .build();
@@ -47,7 +47,7 @@ public class ChromaConfig {
      */
     @Bean
     public ChromaApi chromaApi(@Qualifier("localRestClientBuilder") RestClient.Builder localRestClientBuilder,
-                               ObjectMapper objectMapper) {
+                               JsonMapper objectMapper) {
         ChromaDbClientProperties chromaDbClientProperties = remoteConfigLoader.getChromaDbClientProperties();
         // 1. 构建 ChromaDB 连接 URL
         String host = chromaDbClientProperties.getClient().getHost();

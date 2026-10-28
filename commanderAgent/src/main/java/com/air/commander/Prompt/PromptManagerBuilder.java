@@ -9,10 +9,10 @@ import com.air.commander.model.Step;
 import com.air.commander.orchestrator.CandidateGenerator;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PromptManagerBuilder {
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
     private final ChatClientSelector chatClientSelector;
 
     /**

@@ -4,10 +4,9 @@ import com.air.commander.graph.GraphBuilder;
 import com.air.commander.graph.common.GraphCommonDataProcessor;
 import com.air.commander.model.*;
 import com.air.commander.tools.TextFormatTools;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,13 +19,13 @@ public class IterativeCorrectionExecutor {
     private final SequentialExecutor sequentialExecutor;
     private final StepUnitExecutor stepUnitExecutor;
     private final GraphCommonDataProcessor graphCommonDataProcessor;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     public IterativeCorrectionExecutor(GraphBuilder graphBuilder,
                                        SequentialExecutor sequentialExecutor,
                                        StepUnitExecutor stepUnitExecutor,
                                        GraphCommonDataProcessor graphCommonDataProcessor,
-                                       ObjectMapper objectMapper) {
+                                       JsonMapper objectMapper) {
         this.graphBuilder = graphBuilder;
         this.sequentialExecutor = sequentialExecutor;
         this.stepUnitExecutor = stepUnitExecutor;
@@ -262,7 +261,7 @@ public class IterativeCorrectionExecutor {
             state.put("phase", phase);
             state.put("mainStepIndex", mainStepIndex);
             context.put("iterationState_" + loopId, objectMapper.writeValueAsString(state));
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             log.error("保存循环状态失败", e);
         }
     }

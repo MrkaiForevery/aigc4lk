@@ -5,7 +5,6 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.alibaba.cloud.ai.dashscope.embedding.DashScopeEmbeddingModel;
 import com.alibaba.cloud.ai.dashscope.embedding.DashScopeEmbeddingOptions;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chroma.vectorstore.ChromaApi;
@@ -15,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 @Slf4j
 @Configuration
@@ -65,7 +65,7 @@ public class MemoryAiConfiguration {
      * ChromaApi Bean（底层 HTTP 客户端）
      */
     @Bean
-    public ChromaApi chromaApi(RestClient.Builder restClientBuilder, ObjectMapper objectMapper) {
+    public ChromaApi chromaApi(RestClient.Builder restClientBuilder, JsonMapper objectMapper) {
         String host = chromaDbClientConfig.getClient().getHost();
         int port = chromaDbClientConfig.getClient().getPort();
         String chromaUrl = host + ":" + port;

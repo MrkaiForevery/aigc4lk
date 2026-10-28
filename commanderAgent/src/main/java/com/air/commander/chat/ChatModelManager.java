@@ -172,7 +172,7 @@ public class ChatModelManager {
     public OllamaChatModel localOllamaQWEN3Model(OllamaApi localOllamaApi) {
         return OllamaChatModel.builder()
                 .ollamaApi(localOllamaApi)
-                .defaultOptions(OllamaChatOptions.builder()
+                .options(OllamaChatOptions.builder()
                         .model(SupportChatModeType.LOCAL_OLLAMA_QWEN3.getModelName())
                         .temperature(0.7)
                         .build())
@@ -189,7 +189,7 @@ public class ChatModelManager {
     public OllamaChatModel localOllamaLLAMA3Model(OllamaApi localOllamaApi) {
         return OllamaChatModel.builder()
                 .ollamaApi(localOllamaApi)
-                .defaultOptions(OllamaChatOptions.builder()
+                .options(OllamaChatOptions.builder()
                         .model(SupportChatModeType.LOCAL_OLLAMA_LLAMA3.getModelName())
                         .temperature(0.7)
                         .build())

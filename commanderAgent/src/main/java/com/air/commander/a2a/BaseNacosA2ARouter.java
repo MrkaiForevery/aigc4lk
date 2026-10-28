@@ -7,7 +7,6 @@ import com.air.commander.resilience.ResilienceManager;
 import com.alibaba.cloud.ai.a2a.registry.nacos.discovery.NacosAgentCardProvider;
 import com.alibaba.cloud.ai.graph.agent.a2a.AgentCardWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.a2a.spec.Message;
 import io.a2a.spec.TextPart;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +16,7 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -49,7 +49,7 @@ public class BaseNacosA2ARouter {
     private final DiscoveryClient discoveryClient;
     private final NacosAgentCardProvider agentCardProvider;
     private final ResilienceManager resilience;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
     private final RestClient restClient; // 单例
     private final PromptManagerBuilder promptManagerBuilder;
 
@@ -57,7 +57,7 @@ public class BaseNacosA2ARouter {
     public BaseNacosA2ARouter(DiscoveryClient discoveryClient,
                               NacosAgentCardProvider nacosAgentCardProvider,
                               ResilienceManager resilience,
-                              ObjectMapper objectMapper,
+                              JsonMapper objectMapper,
                               @Qualifier("a2aRestClientBuilder") RestClient.Builder a2aRestClientBuilder,
                               PromptManagerBuilder promptManagerBuilder) {   // 注入 Spring 管理的 ObjectMapper
         this.discoveryClient = discoveryClient;

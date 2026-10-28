@@ -1,7 +1,7 @@
 package com.air.mcp.gateway.registry;
 
-import com.air.mcp.gateway.annotation.McpResourceMeta;
-import org.springaicommunity.mcp.annotation.McpResource;
+import com.air.mcp.gateway.annotation.CustomerMcpResourceMeta;
+import org.springframework.ai.mcp.annotation.McpResource;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.stereotype.Component;
@@ -29,7 +29,7 @@ public class McpBizResourcesRegistry implements BeanPostProcessor {
         ReflectionUtils.doWithMethods(targetClass, method -> {
             McpResource mcpResource = method.getAnnotation(McpResource.class);
             if (mcpResource != null) {
-                McpResourceMeta meta = method.getAnnotation(McpResourceMeta.class);
+                CustomerMcpResourceMeta meta = method.getAnnotation(CustomerMcpResourceMeta.class);
                 if (meta == null) {
                     throw new IllegalStateException("启动失败：资源 " + mcpResource.name() + " 缺失 @McpResourceMeta 标签！");
                 }

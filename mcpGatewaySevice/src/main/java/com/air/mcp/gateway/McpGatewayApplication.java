@@ -1,5 +1,6 @@
 package com.air.mcp.gateway;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.ComponentScan;
 @EnableFeignClients(basePackages = "com.air.api.feignClient")
 @EnableDiscoveryClient
 @SpringBootApplication
+@MapperScan("com.air.mcp.gateway.mapper")
 public class McpGatewayApplication {
 
     public static void main(String[] args) {

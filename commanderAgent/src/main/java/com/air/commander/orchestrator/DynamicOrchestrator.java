@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.*;
 
@@ -28,7 +29,7 @@ public class DynamicOrchestrator {
     private final BaseNacosA2ARouter baseNacosA2ARouter;
     private final PlanValidator planValidator;
     private final ResilienceManager resilienceManager;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
     private final PromptManagerBuilder promptManagerBuilder;
 
     public DynamicOrchestrator(ChatClientSelector chatClientSelector,
@@ -40,7 +41,7 @@ public class DynamicOrchestrator {
         this.baseNacosA2ARouter = baseNacosA2ARouter;
         this.planValidator = planValidator;
         this.resilienceManager = resilienceManager;
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper = new JsonMapper();
         this.promptManagerBuilder = promptManagerBuilder;
     }
 

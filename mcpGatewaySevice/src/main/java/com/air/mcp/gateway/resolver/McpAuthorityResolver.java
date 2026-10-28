@@ -23,7 +23,7 @@ public class McpAuthorityResolver {
     private final McpBizToolsRegistry mcpBizToolsRegistry;
 
     /**
-     * 根据agentId+userRoles+userId 解析mcpToolsRoles权限
+     * 根据agentId+userRoles+userId 解析mcpToolsRoles权限，获取对应权限范围内的可操作mcpTools
      * @param agentId 智能体id
      * @param userRoles 用户角色列表(是指在其他认证系统的权限角色)
      * @param userId 用户id
@@ -59,6 +59,16 @@ public class McpAuthorityResolver {
 //            if ("deny".equals(override.getEffect())) visibleTools.remove(override.getToolName());
 //        }
 
+        return null;
+    }
+
+    public Set<String> resolveMcpBizResources(String agentId, Set<String> roles, String userId) {
+        //todo 待实现
+        return null;
+    }
+
+    public Set<String> resolveMcpBizPrompts(String agentId, Set<String> roles, String userId) {
+        //todo 待实现
         return null;
     }
 }

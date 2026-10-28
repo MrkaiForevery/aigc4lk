@@ -1,7 +1,7 @@
 package com.air.mcp.gateway.registry;
 
-import com.air.mcp.gateway.annotation.McpToolMeta;
-import org.springaicommunity.mcp.annotation.McpTool;
+import com.air.mcp.gateway.annotation.CustomerMcpToolMeta;
+import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.stereotype.Component;
@@ -29,7 +29,7 @@ public class McpBizToolsRegistry implements BeanPostProcessor {
         ReflectionUtils.doWithMethods(targetClass, method -> {
             McpTool mcpTool = method.getAnnotation(McpTool.class);
             if (mcpTool != null) {
-                McpToolMeta meta = method.getAnnotation(McpToolMeta.class);
+                CustomerMcpToolMeta meta = method.getAnnotation(CustomerMcpToolMeta.class);
                 if (meta == null) {
                     throw new IllegalStateException("启动失败：工具 " + mcpTool.name() + " 缺失 @McpToolMeta 标签！");
                 }

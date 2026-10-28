@@ -9,7 +9,7 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface McpResourceMeta {
+public @interface CustomerMcpResourceMeta {
     /**资源所属域Id--如 monitor_950925*/
     String domainId();
 

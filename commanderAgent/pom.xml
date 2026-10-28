@@ -17,7 +17,7 @@
 
     <properties>
         <java.version>17</java.version>
-        <redisson-spring.version>3.47.0</redisson-spring.version>
+        <redisson-spring.version>4.1.0</redisson-spring.version>
         <seata.version>2.6.0</seata.version>
         <resilience4j.version>2.2.0</resilience4j.version>
     </properties>
@@ -38,7 +38,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

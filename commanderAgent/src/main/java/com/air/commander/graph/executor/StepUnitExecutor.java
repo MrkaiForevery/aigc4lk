@@ -10,18 +10,15 @@ import com.air.commander.model.Step;
 import com.air.commander.model.StepDataContract;
 import com.air.commander.resilience.ResilienceManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.a2a.spec.Message;
-import io.a2a.spec.TextPart;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -34,14 +31,14 @@ public class StepUnitExecutor {
     private final ResilienceManager resilience;
     private final DataContractEngine dataContractEngine;
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     public StepUnitExecutor(ChatClientSelector chatClientSelector,
                             BaseNacosA2ARouter a2aRouter,
                             PromptManagerBuilder promptManagerBuilder,
                             ResilienceManager resilience,
                             DataContractEngine dataContractEngine,
-                            ObjectMapper objectMapper) {
+                            JsonMapper objectMapper) {
         this.chatClientSelector = chatClientSelector;
         this.a2aRouter = a2aRouter;
         this.promptManagerBuilder = promptManagerBuilder;

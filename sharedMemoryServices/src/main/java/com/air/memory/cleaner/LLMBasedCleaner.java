@@ -11,6 +11,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,7 @@ import java.util.concurrent.CompletableFuture;
 public class LLMBasedCleaner {
 
     private final ChatModel chatModel;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = new JsonMapper();
 
     /**
      * LLM 清洗主入口（异步）
@@ -70,7 +71,7 @@ public class LLMBasedCleaner {
                                     : null)
                             .build()
             );
-        } catch (JsonProcessingException e) {
+        } catch (RuntimeException e) {
             log.warn("LLM 清洗 JSON 解析失败，回退到规则清洗结果", e);
             ruleCleaned.setRemark("LLM 解析失败，使用规则清洗结果");
             return CompletableFuture.completedFuture(ruleCleaned);

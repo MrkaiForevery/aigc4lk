@@ -10,8 +10,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
 import java.util.Objects;
@@ -33,14 +33,14 @@ public class IntentClassifier {
     private final RemoteConfigLoader configLoader;
     private final ChatClient chatClient;
     private final ResilienceManager resilienceManager;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
     private final PromptManagerBuilder promptManagerBuilder;
 
     public IntentClassifier(RemoteConfigLoader configLoader,
                             ChatClientSelector chatClientSelector,
                             ResilienceManager resilienceManage,
                             PromptManagerBuilder promptManagerBuilder,
-                            ObjectMapper objectMapper) {
+                            JsonMapper objectMapper) {
         this.configLoader = configLoader;
         this.chatClient = chatClientSelector.getClient(FAST_MODEL_CLIENT);
         this.resilienceManager = resilienceManage;
@@ -95,7 +95,7 @@ public class IntentClassifier {
         try {
             Map<String, Object> responseMap = objectMapper.readValue(llmOutput, Map.class);
             return extractIntent(responseMap);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             log.error("解析 LLM 意图分类结果失败, 降级为动态编排", e);
             return IntentResult.dynamic(3,false);
         }

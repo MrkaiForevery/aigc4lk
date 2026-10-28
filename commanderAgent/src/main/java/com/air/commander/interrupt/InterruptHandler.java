@@ -14,6 +14,7 @@ import org.apache.seata.core.context.RootContext;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -29,11 +30,11 @@ public class InterruptHandler {
 
     private final RedissonClient redissonClient;
     private final CredentialService credentialService;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     public InterruptHandler(CredentialService credentialService,
                             RedissonClient redissonClient,
-                            ObjectMapper objectMapper) {
+                            JsonMapper objectMapper) {
         this.credentialService = credentialService;
         this.redissonClient = redissonClient;
         this.objectMapper = objectMapper;
@@ -83,7 +84,7 @@ public class InterruptHandler {
             redissonClient.getBucket("interrupt:" + xid).set(ctx, Duration.ofMinutes(60));
             log.info("检查点已创建: xid={}, stepId={}, type={}", xid, stepId, command.getType());
 
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             log.error("【建立suspend】序列化执行计划失败", e);
             throw new RuntimeException(e);
         }

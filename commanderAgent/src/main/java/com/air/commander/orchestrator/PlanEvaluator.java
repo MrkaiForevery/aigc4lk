@@ -6,14 +6,11 @@ import com.air.commander.model.MemoryContext;
 import com.air.commander.model.OrchestrationPlan;
 import com.air.commander.model.PlanEvaluationResult;
 import com.air.commander.resilience.ResilienceManager;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,13 +30,13 @@ public class PlanEvaluator {
     private final PlanValidator planValidator;
     private final PromptManagerBuilder promptManagerBuilder;
     private final ResilienceManager resilienceManager;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper objectMapper;
 
     public PlanEvaluator(ChatClientSelector chatClientSelector,
                          PlanValidator planValidator,
                          PromptManagerBuilder promptManagerBuilder,
                          ResilienceManager resilienceManager,
-                         ObjectMapper objectMapper) {
+                         JsonMapper objectMapper) {
         this.reasoningModelClient = chatClientSelector.getClient("reasoningModelClient");
         this.planValidator = planValidator;
         this.resilienceManager = resilienceManager;

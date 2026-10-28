@@ -6,8 +6,6 @@ import com.air.memory.config.ChromaDbClientConfig;
 import com.air.memory.entity.KnowledgeIndex;
 import com.air.memory.entity.KnowledgeResult;
 import com.air.memory.mapper.KnowledgeIndexMapper;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chroma.vectorstore.ChromaApi;
@@ -18,6 +16,8 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -39,7 +39,7 @@ public class KnowledgeRepository {
     private final RestClient chromaDegradeLowRestClient;
 
     private final KnowledgeIndexMapper indexMapper;  // 文档索引 Mapper
-    private final ObjectMapper objectMapper;  // 直接注入
+    private final JsonMapper objectMapper;  // 直接注入
 
     private final EmbeddingModel embeddingModel;   // OpenAI / DashScope
 
