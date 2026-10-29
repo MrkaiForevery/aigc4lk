@@ -10,12 +10,13 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface CustomerMcpResourceMeta {
-    /**资源所属域Id--如 monitor_950925*/
-    String domainId();
 
-    /**资源所属业务域Id--如payment_13579_monitor_950925*/
-    String bizDomainId();
+    /**资源元素所属域编码*/
+    String domainCode();
 
-    /**资源可操作类型--如：read,write,execute*/
-    String sensitivity();
+    /**资源元素可操作类型--如：read,write,execute*/
+    String sensitivityType();
+
+    /**工资源元素自身code编码*/
+    String elementCode();
 }

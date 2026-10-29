@@ -1,7 +1,6 @@
 package com.air.mcp.gateway.repository;
 
 import com.air.mcp.gateway.mapper.AgentUserRoleMappingMapper;
-import com.air.mcp.gateway.model.AgentUserRoleMapping;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

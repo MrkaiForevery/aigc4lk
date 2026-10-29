@@ -12,8 +12,8 @@ import org.springframework.stereotype.Service;
 public class UserBaseInfoResources {
 
     @McpResource(uri = "db://identity/userinfo/schema", name = "用户表结构", description = "获取users表的DDL", mimeType = "text/plain")
-    @CustomerMcpResourceMeta(domainId = "identity",bizDomainId = "identity_user_db",sensitivity = "read")
-    @RequireMcpResourcePermission
+    @CustomerMcpResourceMeta(domainCode= "resource_identity_user_db",sensitivityType = "read",elementCode = "2001")
+    @RequireMcpResourcePermission(resourceCode = "2001",resourceName = "getTableUserInfoSchema")
     public String getTableUserInfoSchema(McpTransportContext ctx) {
         //这里先模拟返回 todo
         return "CREATE TABLE user_info (id BIGINT, name VARCHAR(100), ...);";

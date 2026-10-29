@@ -20,7 +20,7 @@ public class McpBizResourcesRegistry implements BeanPostProcessor {
 
     public final Map<String, BizResourceMetadata> bizResourceRegistryMap = new ConcurrentHashMap<>();
 
-    public record BizResourceMetadata(String name, String domainId, String bizDomainId, String sensitivity) {
+    public record BizResourceMetadata(String name, String domainCode, String elementCode, String sensitivityType) {
     }
 
     @Override
@@ -33,7 +33,7 @@ public class McpBizResourcesRegistry implements BeanPostProcessor {
                 if (meta == null) {
                     throw new IllegalStateException("启动失败：资源 " + mcpResource.name() + " 缺失 @McpResourceMeta 标签！");
                 }
-                bizResourceRegistryMap.put(mcpResource.name(), new BizResourceMetadata(mcpResource.name(), meta.domainId(), meta.bizDomainId(), meta.sensitivity()));
+                bizResourceRegistryMap.put(meta.elementCode(), new BizResourceMetadata(mcpResource.name(), meta.domainCode(), meta.elementCode(), meta.sensitivityType()));
             }
         });
         return bean;

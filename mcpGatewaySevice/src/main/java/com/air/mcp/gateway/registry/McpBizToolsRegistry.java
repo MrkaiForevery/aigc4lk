@@ -20,7 +20,7 @@ public class McpBizToolsRegistry implements BeanPostProcessor {
 
     public final Map<String, BizToolMetadata> bizToolRegistryMap = new ConcurrentHashMap<>();
 
-    public record BizToolMetadata(String name, String domainId, String bizDomainId, String sensitivity) {
+    public record BizToolMetadata(String name, String domainCode, String elementCode, String sensitivityType) {
     }
 
     @Override
@@ -33,7 +33,7 @@ public class McpBizToolsRegistry implements BeanPostProcessor {
                 if (meta == null) {
                     throw new IllegalStateException("启动失败：工具 " + mcpTool.name() + " 缺失 @McpToolMeta 标签！");
                 }
-                bizToolRegistryMap.put(mcpTool.name(), new BizToolMetadata(mcpTool.name(), meta.domainId(), meta.bizDomainId(), meta.sensitivity()));
+                bizToolRegistryMap.put(meta.domainCode(), new BizToolMetadata(mcpTool.name(), meta.domainCode(), meta.elementCode(), meta.sensitivityType()));
             }
         });
         return bean;

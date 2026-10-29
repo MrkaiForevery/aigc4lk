@@ -8,7 +8,7 @@ import lombok.Getter;
  */
 @Getter
 @AllArgsConstructor
-public enum McpShareTypeEnums {
+public enum McpSupportShareTypeEnums {
     MCP_TOOLS_TYPE("mcp_tools_type","mcp工具类型"),
     MCP_RESOURCES_TYPE("mcp_resources_type","mcp资源类型"),
     MCP_PROMPT_TYPE("mcp_prompt_type","mcp提示词类型"),

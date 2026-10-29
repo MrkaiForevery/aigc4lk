@@ -1,8 +1,6 @@
 package com.air.mcp.gateway.resolver;
 
-import com.air.mcp.gateway.enums.McpShareTypeEnums;
-import com.air.mcp.gateway.model.AgentUserRoleMapping;
-import com.air.mcp.gateway.model.RolePolicyDefinition;
+import com.air.mcp.gateway.enums.McpSupportShareTypeEnums;
 import com.air.mcp.gateway.registry.McpBizToolsRegistry;
 import com.air.mcp.gateway.repository.AgentUserRoleMappingRepository;
 import com.air.mcp.gateway.repository.RolePolicyDefinitionRepository;
@@ -33,7 +31,7 @@ public class McpAuthorityResolver {
         Set<String> targetRoles = new HashSet<>();
 
         //获取对应的权限角色列表
-        List<AgentUserRoleMapping> baseAuthRoles =  agentUserRoleMappingRepository.findBaseAuthRoles(McpShareTypeEnums.MCP_TOOLS_TYPE.getTypeKey(), agentId,userRoles);
+        List<AgentUserRoleMapping> baseAuthRoles =  agentUserRoleMappingRepository.findBaseAuthRoles(McpSupportShareTypeEnums.MCP_TOOLS_TYPE.getTypeKey(), agentId,userRoles);
         if (baseAuthRoles.isEmpty()) return Collections.emptySet(); // 默认拒绝
         Set<Long> roleIdSet = baseAuthRoles.stream()
                 .map(AgentUserRoleMapping ::getId)

@@ -19,8 +19,8 @@ public class CodeCheckPrompts {
      * prompt方法标定的返回的类型必须是：GetPromptResult
      */
     @McpPrompt(name = "code_review", description = "生成查询用户基本信息提示词模板")
-    @CustomerMcpPromptMeta(domainId = "code",bizDomainId = "code_review_prompt001", sensitivity = "read") // 假设有这个注解
-    @RequireMcpPromptPermission
+    @CustomerMcpPromptMeta(domainCode = "prompt_code_review", sensitivityType = "read", elementCode = "3001") // 假设有这个注解
+    @RequireMcpPromptPermission(promptCode = "3001", promptName = "codeReviewPrompt")
     public McpSchema.GetPromptResult codeReviewPrompt(
             @McpArg(name = "language", description = "编程语言", required = true) String language,
             @McpArg(name = "code", description = "待审查的代码", required = true) String code,

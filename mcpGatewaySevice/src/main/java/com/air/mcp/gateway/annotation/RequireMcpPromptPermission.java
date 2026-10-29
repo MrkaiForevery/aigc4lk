@@ -9,6 +9,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequireMcpPromptPermission {
 
-    // 如果留空，则默认获取 @McpTool 的 name 属性
-    String value() default "";
+    //提示词编码
+    String promptCode() ;
+
+    //提示词名
+    String promptName() default "";
 }

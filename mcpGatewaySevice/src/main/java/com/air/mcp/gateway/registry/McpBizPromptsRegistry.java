@@ -20,7 +20,7 @@ public class McpBizPromptsRegistry implements BeanPostProcessor {
 
     public final Map<String, BizPromptMetadata> bizPromptRegistryMap = new ConcurrentHashMap<>();
 
-    public record BizPromptMetadata(String name, String domainId, String bizDomainId, String sensitivity) {
+    public record BizPromptMetadata(String name, String domainCode, String elementCode, String sensitivityType) {
     }
 
     @Override
@@ -31,9 +31,9 @@ public class McpBizPromptsRegistry implements BeanPostProcessor {
             if (mcpPrompt != null) {
                 CustomerMcpPromptMeta meta = method.getAnnotation(CustomerMcpPromptMeta.class);
                 if (meta == null) {
-                    throw new IllegalStateException("启动失败：工具 " + mcpPrompt.name() + " 缺失 @McpPromptMeta 标签！");
+                    throw new IllegalStateException("启动失败：提示词 " + mcpPrompt.name() + " 缺失 @McpPromptMeta 标签！");
                 }
-                bizPromptRegistryMap.put(mcpPrompt.name(), new BizPromptMetadata(mcpPrompt.name(), meta.domainId(), meta.bizDomainId(), meta.sensitivity()));
+                bizPromptRegistryMap.put(meta.elementCode(), new BizPromptMetadata(mcpPrompt.name(), meta.domainCode(), meta.elementCode(), meta.sensitivityType()));
             }
         });
         return bean;

@@ -3,7 +3,7 @@ package com.air.mcp.gateway.aspect;
 import com.air.mcp.gateway.annotation.RequireMcpPromptPermission;
 import com.air.mcp.gateway.annotation.RequireMcpResourcePermission;
 import com.air.mcp.gateway.annotation.RequireMcpToolPermission;
-import com.air.mcp.gateway.model.IdentityMcpInfo;
+import com.air.mcp.gateway.model.identity.IdentityMcpCommonInfo;
 import com.air.mcp.gateway.resolver.McpAuthorityResolver;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.spec.McpError;
@@ -54,12 +54,12 @@ public class McpAuthorizationAspect {
         }
 
         // 3. 包装身份信息
-        IdentityMcpInfo identityMcpInfo = buildIdentityMcpInfo(ctx);
+        IdentityMcpCommonInfo identityMcpCommonInfo = buildIdentityMcpInfo(ctx);
 
         // 4. 校验权限(调用专门针对 Tool 的解析方法)
-        Set<String> visible = mcpAuthorityResolver.resolveMcpBizTools(identityMcpInfo.getAgentId(), identityMcpInfo.getUserRoles(), identityMcpInfo.getUserId());
+        Set<String> visible = mcpAuthorityResolver.resolveMcpBizTools(identityMcpCommonInfo.getAgentId(), identityMcpCommonInfo.getUserRoles(), identityMcpCommonInfo.getUserId());
         if (!visible.contains(toolName)) {
-            log.warn("越权调用拦截: agentId={}, userId={}, tool={}", identityMcpInfo.getAgentId(), identityMcpInfo.getUserId(), toolName);
+            log.warn("越权调用拦截: agentId={}, userId={}, tool={}", identityMcpCommonInfo.getAgentId(), identityMcpCommonInfo.getUserId(), toolName);
             throw McpError.builder(502).message("TOOL_FORBIDDEN:无权调用该工具").build();
         }
     }
@@ -95,12 +95,12 @@ public class McpAuthorizationAspect {
         }
 
         // 3. 包装身份信息
-        IdentityMcpInfo identityMcpInfo = buildIdentityMcpInfo(ctx);
+        IdentityMcpCommonInfo identityMcpCommonInfo = buildIdentityMcpInfo(ctx);
 
         // 4. 校验权限 (调用专门针对 Resource 的解析方法)
-        Set<String> visible = mcpAuthorityResolver.resolveMcpBizResources(identityMcpInfo.getAgentId(), identityMcpInfo.getUserRoles(), identityMcpInfo.getUserId());
+        Set<String> visible = mcpAuthorityResolver.resolveMcpBizResources(identityMcpCommonInfo.getAgentId(), identityMcpCommonInfo.getUserRoles(), identityMcpCommonInfo.getUserId());
         if (!visible.contains(resourceKey)) {
-            log.warn("越权访问拦截(Resource): agentId={}, userId={}, resource={}", identityMcpInfo.getAgentId(), identityMcpInfo.getUserId(), resourceKey);
+            log.warn("越权访问拦截(Resource): agentId={}, userId={}, resource={}", identityMcpCommonInfo.getAgentId(), identityMcpCommonInfo.getUserId(), resourceKey);
             throw McpError.builder(403).message("RESOURCE_FORBIDDEN:无权访问该资源").build();
         }
     }
@@ -132,12 +132,12 @@ public class McpAuthorizationAspect {
         }
 
         // 3. 包装身份信息
-        IdentityMcpInfo identityMcpInfo = buildIdentityMcpInfo(ctx);
+        IdentityMcpCommonInfo identityMcpCommonInfo = buildIdentityMcpInfo(ctx);
 
         // 4. 校验权限 (调用专门针对 Prompt 的解析方法)
-        Set<String> visible = mcpAuthorityResolver.resolveMcpBizPrompts(identityMcpInfo.getAgentId(), identityMcpInfo.getUserRoles(), identityMcpInfo.getUserId());
+        Set<String> visible = mcpAuthorityResolver.resolveMcpBizPrompts(identityMcpCommonInfo.getAgentId(), identityMcpCommonInfo.getUserRoles(), identityMcpCommonInfo.getUserId());
         if (!visible.contains(promptName)) {
-            log.warn("越权访问拦截(Prompt): agentId={}, userId={}, prompt={}", identityMcpInfo.getAgentId(), identityMcpInfo.getUserRoles(), promptName);
+            log.warn("越权访问拦截(Prompt): agentId={}, userId={}, prompt={}", identityMcpCommonInfo.getAgentId(), identityMcpCommonInfo.getUserRoles(), promptName);
             throw McpError.builder(403).message("PROMPT_FORBIDDEN:无权访问该提示词").build();
         }
     }
@@ -169,11 +169,11 @@ public class McpAuthorizationAspect {
     }
 
 
-    private IdentityMcpInfo buildIdentityMcpInfo(McpTransportContext ctx) {
+    private IdentityMcpCommonInfo buildIdentityMcpInfo(McpTransportContext ctx) {
         String agentId = (String) ctx.get("agentId");
         String userId = (String) ctx.get("userId");
         Set<String> roles = (Set<String>) ctx.get("userRoles");
-        return IdentityMcpInfo.builder()
+        return IdentityMcpCommonInfo.builder()
                 .agentId(agentId)
                 .userId(userId)
                 .userRoles(roles)

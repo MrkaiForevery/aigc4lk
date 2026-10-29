@@ -9,6 +9,10 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequireMcpToolPermission {
 
-    // 如果留空，则默认获取 @McpTool 的 name 属性
-    String value() default "";
+    //工具编码
+    String toolCode();
+
+    //工具名
+    String toolName() default "";
+
 }

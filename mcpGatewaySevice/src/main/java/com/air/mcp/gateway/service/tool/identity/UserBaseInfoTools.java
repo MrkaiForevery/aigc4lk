@@ -15,17 +15,18 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserBaseInfoTools {
 
-    @McpTool(name = "query_user_base_info", description = "查询用户的基本信息")
-    @CustomerMcpToolMeta(domainId = "identity", bizDomainId = "identity_user_0001", sensitivity = "read")
-    @RequireMcpToolPermission
-    public Map<String, String> queryUserBaseInfo(
-            @McpToolParam(description = "用户身份令牌", required = true) String userToken,
+    @McpTool(name = "query_user_base_info", description = "查询移动用户的基本信息")
+    @CustomerMcpToolMeta(domainCode = "tool_identity_user_base_query", sensitivityType = "read",elementCode = "1001")
+    @RequireMcpToolPermission(toolCode = "1001",toolName = "queryMobileUserBaseInfo")
+    public Map<String, String> queryMobileUserBaseInfo(
+            @McpToolParam(description = "用户身份ID", required = true) String userId,
             @McpToolParam(description = "系统标识", required = true) String systemId,
             McpTransportContext ctx) {
         //todo 这里先模拟返回
-        return Map.of("userId", "950925",
+        return Map.of("userId", userId,
                 "name", "和尚李",
                 "age", "70",
+                "systemId",systemId,
                 "system","华强养瓜基地");
     }
 

@@ -10,12 +10,12 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface CustomerMcpPromptMeta {
-    /**提示列表所属域Id--如 monitor_950925*/
-    String domainId();
+    /**提示词元素所属域编码*/
+    String domainCode();
 
-    /**提示列表所属业务域Id--如payment_13579_monitor_950925*/
-    String bizDomainId();
+    /**提示词元素可操作类型--如：read,write,execute*/
+    String sensitivityType();
 
-    /**提示列表可操作类型--如：read,write,execute*/
-    String sensitivity();
+    /**提示词元素自身code编码*/
+    String elementCode();
 }

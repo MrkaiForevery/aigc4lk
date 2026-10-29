@@ -1,8 +1,3 @@
---- 表设计
-domain_definition
-biz_domian_definition
-id,mcp_type,domian_type,domian_level,from_source_id,from_source_name,domian_id,domian_name,
-
 
 CREATE SCHEMA IF NOT EXISTS permission_domain_namespace;
 
