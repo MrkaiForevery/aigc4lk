@@ -28,7 +28,7 @@ public class ClientKeyBindRolePolicy implements Serializable, Cloneable {
     /** 客户端类型(如dify/codex/....),; */
     private String clientType ;
 
-    /** 客户端映射key(json类),; */
+    /** 客户端映射key(jsonb类),; */
     private PGobject clientMappingKeyJson ;
 
     /** 绑定的角色编码,; */

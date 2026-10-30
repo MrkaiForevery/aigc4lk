@@ -28,8 +28,8 @@ public class AuthBlackListMapping implements Serializable, Cloneable {
     /** 客户端类型(如dify/codex/....),; */
     private String clientType ;
 
-    /** 客户端映射key(json类),; */
-    private String blackMappingKeyJson ;
+    /** 客户端映射key(jsonb类),; */
+    private PGobject blackMappingKeyJson ;
 
     /** 拒绝使用的权限元素,; */
     private String denyTargetElementCodes ;

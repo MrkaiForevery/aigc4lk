@@ -15,4 +15,20 @@ public enum McpSupportClientTypeEnums {
 
     private final String typeKey;
     private final String desc;
+
+    /**
+     * 根据 typeKey 获取对应的枚举实例
+     */
+    public static McpSupportClientTypeEnums getByTypeKey(String typeKey) {
+        if (typeKey == null) {
+            return null;
+        }
+        for (McpSupportClientTypeEnums value : values()) {
+            if (value.getTypeKey().equals(typeKey)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
 }

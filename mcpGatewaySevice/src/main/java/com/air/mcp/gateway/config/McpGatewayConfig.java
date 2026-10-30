@@ -1,17 +1,20 @@
 package com.air.mcp.gateway.config;
 
+import com.air.mcp.gateway.auth.PermissionSearchEngine;
+import com.air.mcp.gateway.auth.handler.AbstractClientAuthHandler;
+import com.air.mcp.gateway.enums.McpSupportClientTypeEnums;
+import com.air.mcp.gateway.enums.McpSupportShareTypeEnums;
+import com.air.mcp.gateway.model.identity.AuthMcpCommonInfo;
 import com.air.mcp.gateway.parser.IdentityTokenParser;
 import com.air.mcp.gateway.resolver.McpAuthorityResolver;
-import io.modelcontextprotocol.common.McpTransportContext;
-import io.modelcontextprotocol.server.McpServerFeatures;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.ai.mcp.customizer.McpSyncServerCustomizer;
 import org.springframework.ai.mcp.server.webmvc.transport.WebMvcStreamableServerTransportProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -24,30 +27,41 @@ import java.util.Set;
 @Configuration
 public class McpGatewayConfig {
 
+    @Resource
+    private PermissionSearchEngine permissionSearchEngine;
+
     /**
      * 按权限视角，返回客户端可见tools列表
      * Spring AI 2.0.2（底层MCP Java SDK 2.1.0）中，只有 tools/list 提供了过滤能力，而 Resource 和 Prompt 没有
+     *
      * @param mcpAuthorityResolver
      * @return
      */
     @Primary
     @Bean
-    public McpSyncServerCustomizer toolVisibilityCustomizer(McpAuthorityResolver mcpAuthorityResolver, List<McpServerFeatures.SyncResourceSpecification> resourceSpecs) {
+    public McpSyncServerCustomizer toolVisibilityCustomizer(McpAuthorityResolver mcpAuthorityResolver) {
         return builder -> builder
-                .addToolFilter((transportContext, tool) -> {
-                    // 从 Context 中读取由 contextExtractor 放入的身份信息
-                    String agentId = (String) transportContext.get("agentId");
-                    String userId = (String) transportContext.get("userId");
-                    Set<String> userRoles = (Set<String>) transportContext.get("userRoles");
-                    if (agentId == null || userId == null) return false;
-                    //tools类型处理
-                    Set<String> visibleTools = mcpAuthorityResolver.resolveMcpBizTools(agentId, userRoles, userId);
-                    return visibleTools.contains(tool.name());
+                .addToolFilter((mcpTransportContext, tool) -> {
+
+                    // 获取指定的handler
+                    String clientType = (String) mcpTransportContext.get("clientType");
+                    McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
+                    AbstractClientAuthHandler handler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
+
+                    //使用handler构建权限通用对象
+                    AuthMcpCommonInfo authMcpCommonInfo = handler.buildMcpContextAuthObject(mcpTransportContext);
+
+                    //查找标准的权限列表
+                    Set<String> authElementCodeSet = handler.searchPermissionList(McpSupportShareTypeEnums.MCP_TOOLS_TYPE, authMcpCommonInfo);
+
+                    return authElementCodeSet.contains(tool.name());
                 });
     }
 
+
     /**
      * 传输层拦截定制化处理逻辑: 将request-header中的权限信息传递给McpTransportContext上下文中
+     *
      * @param identityTokenParser
      * @return
      */
@@ -55,19 +69,11 @@ public class McpGatewayConfig {
     public WebMvcStreamableServerTransportProvider transportProvider(IdentityTokenParser identityTokenParser) {
         return WebMvcStreamableServerTransportProvider.builder()
                 .contextExtractor(serverRequest -> {
-                    var request = serverRequest.servletRequest();
-                    // 1. 提取 Header
-                    String agentId = request.getHeader("X-Agent-ID");
-                    String token = request.getHeader("X-Dify-SSO-Token");
-                    // 2. 校验 Token 并解析角色
-                    Set<String> userRoles = identityTokenParser.parseUserTokenRoles(token);
-                    String userId = identityTokenParser.parseUserId(token);
-                    // 3. 放入mcp的上下文
-                    return McpTransportContext.create(Map.of(
-                            "agentId", agentId != null ? agentId : "unknown",
-                            "userId", userId,
-                            "userRoles", userRoles
-                    ));
+                    HttpServletRequest request = serverRequest.servletRequest();
+                    String clientType = request.getHeader("X-Client-Type");
+                    McpSupportClientTypeEnums clientTypeKeyEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
+                    AbstractClientAuthHandler authHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeKeyEnum);
+                    return authHandler.extractAuthElementToMcpContext(request);
                 }).build();
     }
 }

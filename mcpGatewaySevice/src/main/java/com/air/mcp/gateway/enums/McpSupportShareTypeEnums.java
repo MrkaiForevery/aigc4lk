@@ -16,4 +16,14 @@ public enum McpSupportShareTypeEnums {
 
     private final String typeKey;
     private final String desc;
+
+    public static boolean equalsByTypeKey(McpSupportShareTypeEnums a,McpSupportShareTypeEnums b){
+        if (a == null || b == null) {
+            return false;
+        }
+        if ( a.getTypeKey().equals(b.getTypeKey())) {
+            return true;
+        }
+        return false;
+    }
 }

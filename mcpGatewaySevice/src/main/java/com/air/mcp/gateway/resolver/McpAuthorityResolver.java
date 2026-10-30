@@ -1,11 +1,18 @@
 package com.air.mcp.gateway.resolver;
 
+import com.air.mcp.gateway.auth.PermissionSearchEngine;
+import com.air.mcp.gateway.auth.handler.AbstractBlackListParserHandler;
 import com.air.mcp.gateway.enums.McpSupportShareTypeEnums;
+import com.air.mcp.gateway.model.auth.AuthBlackListMapping;
+import com.air.mcp.gateway.model.auth.ClientKeyBindRolePolicy;
+import com.air.mcp.gateway.model.auth.RoleBindElementPolicy;
+import com.air.mcp.gateway.model.identity.AuthMcpCommonInfo;
 import com.air.mcp.gateway.registry.McpBizToolsRegistry;
-import com.air.mcp.gateway.repository.AgentUserRoleMappingRepository;
-import com.air.mcp.gateway.repository.RolePolicyDefinitionRepository;
-import com.air.mcp.gateway.repository.UserOverrideRoleMappingRepository;
+import com.air.mcp.gateway.repository.ClientKeyBindRolePolicyRepository;
+import com.air.mcp.gateway.repository.RoleBindElementPolicyRepository;
+import com.air.mcp.gateway.repository.AuthBlackListMappingRepository;
 import lombok.RequiredArgsConstructor;
+import org.postgresql.util.PGobject;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -15,57 +22,54 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class McpAuthorityResolver {
 
-    private final RolePolicyDefinitionRepository rolePolicyDefinitionRepository;
-    private final AgentUserRoleMappingRepository agentUserRoleMappingRepository;
-    private final UserOverrideRoleMappingRepository userOverrideRoleMappingRepository;
+    private final RoleBindElementPolicyRepository roleBindElementPolicyRepository;
+    private final ClientKeyBindRolePolicyRepository clientKeyBindRolePolicyRepository;
+    private final AuthBlackListMappingRepository authBlackListMappingRepository;
+    private final PermissionSearchEngine permissionSearchEngine;
+
     private final McpBizToolsRegistry mcpBizToolsRegistry;
 
     /**
-     * 根据agentId+userRoles+userId 解析mcpToolsRoles权限，获取对应权限范围内的可操作mcpTools
-     * @param agentId 智能体id
-     * @param userRoles 用户角色列表(是指在其他认证系统的权限角色)
-     * @param userId 用户id
+     * 根据commonInfo 解析mcpToolsRoles权限，获取对应权限范围内的可操作mcpTools
      * @return 过滤后的mcpToolsRoles列表
      */
-    public Set<String> resolveMcpBizTools(String agentId, Set<String> userRoles, String userId) {
+    public Set<String> resolveMcpBizTools(AuthMcpCommonInfo commonInfo) {
+
         Set<String> targetRoles = new HashSet<>();
 
         //获取对应的权限角色列表
-        List<AgentUserRoleMapping> baseAuthRoles =  agentUserRoleMappingRepository.findBaseAuthRoles(McpSupportShareTypeEnums.MCP_TOOLS_TYPE.getTypeKey(), agentId,userRoles);
+        List<ClientKeyBindRolePolicy> baseAuthRoles =  clientKeyBindRolePolicyRepository.findBaseAuthRoles(McpSupportShareTypeEnums.MCP_TOOLS_TYPE.getTypeKey(), commonInfo.getClientMappingKeyJsonList());
         if (baseAuthRoles.isEmpty()) return Collections.emptySet(); // 默认拒绝
-        Set<Long> roleIdSet = baseAuthRoles.stream()
-                .map(AgentUserRoleMapping ::getId)
+        Set<String> roleCodeSet = baseAuthRoles.stream()
+                .map(ClientKeyBindRolePolicy ::getBindRoleCode)
                 .collect(Collectors.toSet());
 
-        // 2. 获取所有相关role-auth策略矩阵数据
-        List<RolePolicyDefinition> basePolicies = rolePolicyDefinitionRepository.findPoliciesByRoles(roleIdSet);
+        // 获取所有相关role-auth策略矩阵数据
+        List<RoleBindElementPolicy> basePolicies = roleBindElementPolicyRepository.findPoliciesByRoles(roleCodeSet);
         if (basePolicies.isEmpty()) return Collections.emptySet();
-        //剔除deny禁止项
-        Set<RolePolicyDefinition> basePoliciesSet = basePolicies.stream()
-                .filter(e -> !"deny".equals(e.getEffect()))
+        Set<String> baseElementCodeSet = basePolicies.stream()
+                .map(RoleBindElementPolicy::getElementCode)
                 .collect(Collectors.toSet());
 
-        // 3. 遍历系统中的所有工具，进行标签匹配 todo
-        Map<String, McpBizToolsRegistry.BizToolMetadata> allBizToolMetadataMap = mcpBizToolsRegistry.getAllBizToolMetadataMap();
-        //todo 这里还需要通配符号解析的匹配逻辑
+        //用户黑名单过滤
+        List<AuthBlackListMapping> allBaseBlackList = authBlackListMappingRepository.findAllBlackListByClientType(commonInfo.getClientTypeEnum().getTypeKey());
+        //这里要写一个黑名单处理逻辑
+        AbstractBlackListParserHandler blackListHandler = permissionSearchEngine.findBlackListHandlerByClientKeyEnum(commonInfo.getClientTypeEnum());
+        Map<String, List<String>> allBaseBlackMap = blackListHandler.parserBlackList(allBaseBlackList);
 
+        //传入本身userId,过滤掉黑名单里面的权限
+        List<String> userIdJsonList = commonInfo.getBlackMappingKeyJsonList();
+        Set<String> resultSet = blackListHandler.doFilter(userIdJsonList, allBaseBlackMap, baseElementCodeSet);
 
-        // 4. 叠加用户级特殊覆盖 todo
-//        List<UserOverrideRoleMapping> overrides = userOverrideRoleMappingRepository.findByAgentAndUser(agentId, userId);
-//        for (UserOverrideRoleMapping override : overrides) {
-//            if ("allow".equals(override.getEffect())) visibleTools.add(override.getToolName());
-//            if ("deny".equals(override.getEffect())) visibleTools.remove(override.getToolName());
-//        }
-
-        return null;
+        return resultSet;
     }
 
-    public Set<String> resolveMcpBizResources(String agentId, Set<String> roles, String userId) {
+    public Set<String> resolveMcpBizResources(AuthMcpCommonInfo commonInfo) {
         //todo 待实现
         return null;
     }
 
-    public Set<String> resolveMcpBizPrompts(String agentId, Set<String> roles, String userId) {
+    public Set<String> resolveMcpBizPrompts(AuthMcpCommonInfo commonInfo) {
         //todo 待实现
         return null;
     }

@@ -15,9 +15,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserBaseInfoTools {
 
-    @McpTool(name = "query_user_base_info", description = "查询移动用户的基本信息")
-    @CustomerMcpToolMeta(domainCode = "tool_identity_user_base_query", sensitivityType = "read",elementCode = "1001")
-    @RequireMcpToolPermission(toolCode = "1001",toolName = "queryMobileUserBaseInfo")
+    /**
+     *  这里要实现权限绑定必须满足：
+     *  @McpTool(name = "111000000_1001") ==  @CustomerMcpToolMeta(elementCode = "111000000_1001") == @RequireMcpToolPermission(toolCode = "111000000_1001")
+     * @param userId
+     * @param systemId
+     * @param ctx
+     * @return
+     */
+    @McpTool(name = "111000000_1001", description = "查询移动用户的基本信息")
+    @CustomerMcpToolMeta(domainCode = "tool_identity_user_base_query", sensitivityType = "read",elementCode = "111000000_1001")
+    @RequireMcpToolPermission(toolCode = "111000000_1001",toolName = "queryMobileUserBaseInfo")
     public Map<String, String> queryMobileUserBaseInfo(
             @McpToolParam(description = "用户身份ID", required = true) String userId,
             @McpToolParam(description = "系统标识", required = true) String systemId,
