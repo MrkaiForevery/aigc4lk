@@ -176,3 +176,6 @@ COMMENT ON TABLE auth_black_list_mapping IS 'auth_black_list_mapping;权限黑�
 
 ALTER TABLE public.client_key_bind_role_policy ALTER COLUMN client_mapping_key_json TYPE jsonb USING client_mapping_key_json::jsonb;
 ALTER TABLE public.auth_black_list_mapping ALTER COLUMN black_mapping_key_json TYPE jsonb USING black_mapping_key_json::jsonb;
+ALTER TABLE public.auth_element_def ADD CONSTRAINT "UQ_ELEMENT_CODE" UNIQUE (element_code);
+ALTER TABLE public.auth_domain_def ADD CONSTRAINT "UQ_DOMAIN_CODE" UNIQUE (domain_code);
+ALTER TABLE public.auth_role_def ADD CONSTRAINT "UQ_ROLE_CODE" UNIQUE (role_code);

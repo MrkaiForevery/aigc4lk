@@ -1,7 +1,7 @@
 package com.air.mcp.gateway.service.prompt.code;
 
-import com.air.mcp.gateway.annotation.CustomerMcpPromptMeta;
-import com.air.mcp.gateway.annotation.RequireMcpPromptPermission;
+import com.air.mcp.gateway.annotation.meta.CustomerMcpPromptMeta;
+import com.air.mcp.gateway.annotation.permission.RequireMcpPromptPermission;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.spec.McpSchema;
 import lombok.RequiredArgsConstructor;

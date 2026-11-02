@@ -34,9 +34,6 @@ public class McpAuthorityResolver {
      * @return 过滤后的mcpToolsRoles列表
      */
     public Set<String> resolveMcpBizTools(AuthMcpCommonInfo commonInfo) {
-
-        Set<String> targetRoles = new HashSet<>();
-
         //获取对应的权限角色列表
         List<ClientKeyBindRolePolicy> baseAuthRoles =  clientKeyBindRolePolicyRepository.findBaseAuthRoles(McpSupportShareTypeEnums.MCP_TOOLS_TYPE.getTypeKey(), commonInfo.getClientMappingKeyJsonList());
         if (baseAuthRoles.isEmpty()) return Collections.emptySet(); // 默认拒绝

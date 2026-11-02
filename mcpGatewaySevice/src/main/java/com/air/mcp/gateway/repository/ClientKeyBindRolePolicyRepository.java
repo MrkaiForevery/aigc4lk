@@ -1,6 +1,5 @@
 package com.air.mcp.gateway.repository;
 
-import com.air.mcp.gateway.mapper.AgentUserRoleMappingMapper;
 import com.air.mcp.gateway.mapper.ClientKeyBindRolePolicyMapper;
 import com.air.mcp.gateway.model.auth.ClientKeyBindRolePolicy;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -9,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 @Component

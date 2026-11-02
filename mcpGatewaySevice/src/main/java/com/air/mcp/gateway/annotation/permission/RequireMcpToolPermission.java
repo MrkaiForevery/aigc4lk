@@ -1,4 +1,4 @@
-package com.air.mcp.gateway.annotation;
+package com.air.mcp.gateway.annotation.permission;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -7,11 +7,12 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface RequireMcpResourcePermission {
+public @interface RequireMcpToolPermission {
 
-    //资源编码
-    String resourceCode() ;
+    //工具编码
+    String toolCode();
 
-    //资源名
-    String resourceName() default "";
+    //工具名
+    String toolName() default "";
+
 }

@@ -1,7 +1,7 @@
 package com.air.mcp.gateway.service.resources.identity;
 
-import com.air.mcp.gateway.annotation.CustomerMcpResourceMeta;
-import com.air.mcp.gateway.annotation.RequireMcpResourcePermission;
+import com.air.mcp.gateway.annotation.meta.CustomerMcpResourceMeta;
+import com.air.mcp.gateway.annotation.permission.RequireMcpResourcePermission;
 import io.modelcontextprotocol.common.McpTransportContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.mcp.annotation.McpResource;

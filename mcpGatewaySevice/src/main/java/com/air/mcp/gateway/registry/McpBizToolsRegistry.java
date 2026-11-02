@@ -1,6 +1,6 @@
 package com.air.mcp.gateway.registry;
 
-import com.air.mcp.gateway.annotation.CustomerMcpToolMeta;
+import com.air.mcp.gateway.annotation.meta.CustomerMcpToolMeta;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.config.BeanPostProcessor;

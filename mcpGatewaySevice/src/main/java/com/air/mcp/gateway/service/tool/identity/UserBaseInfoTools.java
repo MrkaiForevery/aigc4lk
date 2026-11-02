@@ -1,7 +1,7 @@
 package com.air.mcp.gateway.service.tool.identity;
 
-import com.air.mcp.gateway.annotation.CustomerMcpToolMeta;
-import com.air.mcp.gateway.annotation.RequireMcpToolPermission;
+import com.air.mcp.gateway.annotation.meta.CustomerMcpToolMeta;
+import com.air.mcp.gateway.annotation.permission.RequireMcpToolPermission;
 import io.modelcontextprotocol.common.McpTransportContext;
 import lombok.RequiredArgsConstructor;
 

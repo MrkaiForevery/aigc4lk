@@ -1,4 +1,4 @@
-package com.air.mcp.gateway.annotation;
+package com.air.mcp.gateway.annotation.meta;
 
 
 import java.lang.annotation.*;

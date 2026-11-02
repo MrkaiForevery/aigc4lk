@@ -1,8 +1,11 @@
 package com.air.mcp.gateway.aspect;
 
-import com.air.mcp.gateway.annotation.RequireMcpPromptPermission;
-import com.air.mcp.gateway.annotation.RequireMcpResourcePermission;
-import com.air.mcp.gateway.annotation.RequireMcpToolPermission;
+import com.air.mcp.gateway.annotation.permission.RequireMcpPromptPermission;
+import com.air.mcp.gateway.annotation.permission.RequireMcpResourcePermission;
+import com.air.mcp.gateway.annotation.permission.RequireMcpToolPermission;
+import com.air.mcp.gateway.auth.PermissionSearchEngine;
+import com.air.mcp.gateway.auth.handler.AbstractClientAuthHandler;
+import com.air.mcp.gateway.enums.McpSupportClientTypeEnums;
 import com.air.mcp.gateway.model.identity.AuthMcpCommonInfo;
 import com.air.mcp.gateway.resolver.McpAuthorityResolver;
 import io.modelcontextprotocol.common.McpTransportContext;
@@ -31,7 +34,7 @@ import java.util.Set;
  */
 
 /**
- * mcp调用时的权限验证切面
+ * mcp的tools & resource & prompt 被调用时的权限验证切面
  */
 @Aspect
 @Component
@@ -40,12 +43,13 @@ import java.util.Set;
 public class McpAuthorizationAspect {
 
     private final McpAuthorityResolver mcpAuthorityResolver;
+    private final PermissionSearchEngine permissionSearchEngine;
 
     // ======================== Tool 权限拦截 ========================
     @Before("@annotation(requireMcpToolPermission) && @annotation(org.springframework.ai.mcp.annotation.McpTool)")
     public void checkMcpToolsPermission(JoinPoint joinPoint, RequireMcpToolPermission requireMcpToolPermission) {
         // 1. 获取当前被拦截的tool方法
-        String toolName = getToolName(joinPoint, requireMcpToolPermission);
+        String toolElementCode = getToolElementCode(joinPoint, requireMcpToolPermission);
 
         // 2. 从方法参数中提取 McpTransportContext
         McpTransportContext ctx = extractTransportContext(joinPoint.getArgs());
@@ -53,77 +57,95 @@ public class McpAuthorizationAspect {
             throw McpError.builder(500).message("INVALID_CONTEXT:无法获取 MCP 传输上下文").build();
         }
 
-        // 3. 包装身份信息
-        AuthMcpCommonInfo authMcpCommonInfo = buildIdentityMcpInfo(ctx);
+        // 获取指定的handler
+        String clientType = (String) ctx.get("clientType");
+        McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
+        AbstractClientAuthHandler clientAuthHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
+
+        if (clientAuthHandler == null) {
+            return;
+        }
+
+        //使用handler构建权限通用对象
+        AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
 
         // 4. 校验权限(调用专门针对 Tool 的解析方法)
-        Set<String> visible = mcpAuthorityResolver.resolveMcpBizTools(authMcpCommonInfo.getAgentId(), authMcpCommonInfo.getUserRoles(), authMcpCommonInfo.getUserId());
-        if (!visible.contains(toolName)) {
-            log.warn("越权调用拦截: agentId={}, userId={}, tool={}", authMcpCommonInfo.getAgentId(), authMcpCommonInfo.getUserId(), toolName);
+        Set<String> visibleToolsCode = mcpAuthorityResolver.resolveMcpBizTools(authCommonInfo);
+        if (!visibleToolsCode.contains(toolElementCode)) {
+            log.warn("越权调用(tool)拦截: toolElementCode,authCommonInfo={},visibleToolsCode={}",toolElementCode ,authCommonInfo,visibleToolsCode);
             throw McpError.builder(502).message("TOOL_FORBIDDEN:无权调用该工具").build();
         }
     }
 
-    private static String getToolName(JoinPoint joinPoint, RequireMcpToolPermission requireMcpToolPermission) {
+    private static String getToolElementCode(JoinPoint joinPoint, RequireMcpToolPermission requireMcpToolPermission) {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
 
-        // 确定工具名称（优先用注解的 value，否则取 @McpTool 的 name）
-        String toolName = requireMcpToolPermission.value();
-        if (toolName.isEmpty()) {
+        // 这里以工具编码为唯一标识
+        String toolCode = requireMcpToolPermission.toolCode();
+        if (toolCode.isEmpty()) {
             McpTool mcpTool = method.getAnnotation(McpTool.class);
             if (mcpTool != null) {
-                toolName = mcpTool.name();
+                toolCode = mcpTool.name();
             } else {
-                throw new IllegalStateException("方法既没有指定 value，也没有 @McpTool 注解");
+                throw new IllegalStateException("方法既没有指定toolCode，也没有 @McpTool 注解");
             }
         }
-        return toolName;
+        return toolCode;
     }
 
 
     // ======================== Resource 权限拦截 ========================
     @Before("@annotation(requireMcpResourcePermission) && @annotation(org.springframework.ai.mcp.annotation.McpResource)")
     public void checkMcpResourcePermission(JoinPoint joinPoint, RequireMcpResourcePermission requireMcpResourcePermission) {
-        // 1. 获取当前被拦截的 Resource 标识 (uriTemplate 优先)
-        String resourceKey = getResourceKey(joinPoint, requireMcpResourcePermission);
+        // 1. 获取当前被拦截的 ResourceCode 标识
+        String resourceElementCode = getResourceElementKey(joinPoint, requireMcpResourcePermission);
 
-        // 2. 提取身份信息
+        // 提取身份信息
         McpTransportContext ctx = extractTransportContext(joinPoint.getArgs());
         if (ctx == null) {
             throw McpError.builder(500).message("INVALID_CONTEXT:无法获取 MCP 传输上下文").build();
         }
 
-        // 3. 包装身份信息
-        AuthMcpCommonInfo authMcpCommonInfo = buildIdentityMcpInfo(ctx);
+        // 获取指定的handler
+        String clientType = (String) ctx.get("clientType");
+        McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
+        AbstractClientAuthHandler clientAuthHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
+
+        if (clientAuthHandler == null) {
+            return;
+        }
+
+        //使用handler构建权限通用对象
+        AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
 
         // 4. 校验权限 (调用专门针对 Resource 的解析方法)
-        Set<String> visible = mcpAuthorityResolver.resolveMcpBizResources(authMcpCommonInfo.getAgentId(), authMcpCommonInfo.getUserRoles(), authMcpCommonInfo.getUserId());
-        if (!visible.contains(resourceKey)) {
-            log.warn("越权访问拦截(Resource): agentId={}, userId={}, resource={}", authMcpCommonInfo.getAgentId(), authMcpCommonInfo.getUserId(), resourceKey);
+        Set<String> visibleResourcesCode = mcpAuthorityResolver.resolveMcpBizResources(authCommonInfo);
+        if (!visibleResourcesCode.contains(resourceElementCode)) {
+            log.warn("越权访问拦截(Resource):resourceElementCode={}, authCommonInfo={}, visibleResourcesCode={}",resourceElementCode,authCommonInfo,visibleResourcesCode);
             throw McpError.builder(403).message("RESOURCE_FORBIDDEN:无权访问该资源").build();
         }
     }
 
-    private String getResourceKey(JoinPoint joinPoint, RequireMcpResourcePermission perm) {
-        // 如果注解自定义了 value，优先使用
-        if (StringUtils.hasText(perm.value())) {
-            return perm.value();
-        }
+    private String getResourceElementKey(JoinPoint joinPoint, RequireMcpResourcePermission perm) {
 
+        //如果能从RequireMcpResourcePermission能获取到resourceElementCode
+        if (StringUtils.hasText(perm.resourceCode())) {
+            return perm.resourceCode();
+        }
+        //如果不能就直接从McpResource的name中拿
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
         McpResource resource = method.getAnnotation(McpResource.class);
 
-        // 使用固定 uri
-        return resource.uri();
+        return resource.name();
     }
 
     // ======================== Prompt 权限拦截 ========================
     @Before("@annotation(requireMcpPromptPermission) && @annotation(org.springframework.ai.mcp.annotation.McpPrompt)")
     public void checkMcpPromptPermission(JoinPoint joinPoint, RequireMcpPromptPermission requireMcpPromptPermission) {
         // 1. 获取当前被拦截的 Prompt 标识
-        String promptName = getPromptName(joinPoint, requireMcpPromptPermission);
+        String promptElementCode = getPromptElementCode(joinPoint, requireMcpPromptPermission);
 
         // 2. 提取身份信息
         McpTransportContext ctx = extractTransportContext(joinPoint.getArgs());
@@ -131,20 +153,29 @@ public class McpAuthorizationAspect {
             throw McpError.builder(500).message("INVALID_CONTEXT:无法获取 MCP 传输上下文").build();
         }
 
-        // 3. 包装身份信息
-        AuthMcpCommonInfo authMcpCommonInfo = buildIdentityMcpInfo(ctx);
+        // 获取指定的handler
+        String clientType = (String) ctx.get("clientType");
+        McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
+        AbstractClientAuthHandler clientAuthHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
 
-        // 4. 校验权限 (调用专门针对 Prompt 的解析方法)
-        Set<String> visible = mcpAuthorityResolver.resolveMcpBizPrompts(authMcpCommonInfo.getAgentId(), authMcpCommonInfo.getUserRoles(), authMcpCommonInfo.getUserId());
-        if (!visible.contains(promptName)) {
-            log.warn("越权访问拦截(Prompt): agentId={}, userId={}, prompt={}", authMcpCommonInfo.getAgentId(), authMcpCommonInfo.getUserRoles(), promptName);
+        if (clientAuthHandler == null) {
+            return;
+        }
+
+        //使用handler构建权限通用对象
+        AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
+
+        // 校验权限 (调用专门针对 Prompt 的解析方法)
+        Set<String> visiblePromptElementsCode = mcpAuthorityResolver.resolveMcpBizPrompts(authCommonInfo);
+        if (!visiblePromptElementsCode.contains(promptElementCode)) {
+            log.warn("越权访问拦截(Prompt):promptElementCode={} ,authCommonInfo={}, visiblePromptElementsCode={}",promptElementCode,authCommonInfo,visiblePromptElementsCode);
             throw McpError.builder(403).message("PROMPT_FORBIDDEN:无权访问该提示词").build();
         }
     }
 
-    private String getPromptName(JoinPoint joinPoint, RequireMcpPromptPermission perm) {
-        if (StringUtils.hasText(perm.value())) {
-            return perm.value();
+    private String getPromptElementCode(JoinPoint joinPoint, RequireMcpPromptPermission perm) {
+        if (StringUtils.hasText(perm.promptCode())) {
+            return perm.promptCode();
         }
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
@@ -166,17 +197,5 @@ public class McpAuthorizationAspect {
             }
         }
         return null;
-    }
-
-
-    private AuthMcpCommonInfo buildIdentityMcpInfo(McpTransportContext ctx) {
-        String agentId = (String) ctx.get("agentId");
-        String userId = (String) ctx.get("userId");
-        Set<String> roles = (Set<String>) ctx.get("userRoles");
-        return AuthMcpCommonInfo.builder()
-                .agentId(agentId)
-                .userId(userId)
-                .userRoles(roles)
-                .build();
     }
 }
