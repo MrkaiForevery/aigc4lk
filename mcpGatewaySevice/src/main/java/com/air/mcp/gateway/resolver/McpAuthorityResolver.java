@@ -2,6 +2,7 @@ package com.air.mcp.gateway.resolver;
 
 import com.air.mcp.gateway.auth.PermissionSearchEngine;
 import com.air.mcp.gateway.auth.handler.AbstractBlackListParserHandler;
+import com.air.mcp.gateway.enums.McpSupportClientTypeEnums;
 import com.air.mcp.gateway.enums.McpSupportShareTypeEnums;
 import com.air.mcp.gateway.model.auth.AuthBlackListMapping;
 import com.air.mcp.gateway.model.auth.ClientKeyBindRolePolicy;
@@ -25,17 +26,32 @@ public class McpAuthorityResolver {
     private final RoleBindElementPolicyRepository roleBindElementPolicyRepository;
     private final ClientKeyBindRolePolicyRepository clientKeyBindRolePolicyRepository;
     private final AuthBlackListMappingRepository authBlackListMappingRepository;
+
     private final PermissionSearchEngine permissionSearchEngine;
 
-    private final McpBizToolsRegistry mcpBizToolsRegistry;
+    public Set<String> resolveAuthElements(AuthMcpCommonInfo authInfo, McpSupportShareTypeEnums supportShareTypeEnums) {
+        if (McpSupportShareTypeEnums.equalsByTypeKey(McpSupportShareTypeEnums.MCP_TOOLS_TYPE,supportShareTypeEnums)){
+           return resolveMcpBizTools(authInfo);
+        }
+
+        if (McpSupportShareTypeEnums.equalsByTypeKey(McpSupportShareTypeEnums.MCP_RESOURCES_TYPE,supportShareTypeEnums)){
+            return resolveMcpBizResources(authInfo);
+        }
+
+        if (McpSupportShareTypeEnums.equalsByTypeKey(McpSupportShareTypeEnums.MCP_PROMPT_TYPE,supportShareTypeEnums)){
+            return resolveMcpBizPrompts(authInfo);
+        }
+
+        return Set.of();
+    }
 
     /**
      * 根据commonInfo 解析mcpToolsRoles权限，获取对应权限范围内的可操作mcpTools
      * @return 过滤后的mcpToolsRoles列表
      */
-    public Set<String> resolveMcpBizTools(AuthMcpCommonInfo commonInfo) {
+    private Set<String> resolveMcpBizTools(AuthMcpCommonInfo commonInfo) {
         //获取对应的权限角色列表
-        List<ClientKeyBindRolePolicy> baseAuthRoles =  clientKeyBindRolePolicyRepository.findBaseAuthRoles(McpSupportShareTypeEnums.MCP_TOOLS_TYPE.getTypeKey(), commonInfo.getClientMappingKeyJsonList());
+        List<ClientKeyBindRolePolicy> baseAuthRoles =  clientKeyBindRolePolicyRepository.findBaseAuthRoles(commonInfo.getClientTypeEnum().getTypeKey(), commonInfo.getClientMappingKeyJsonList());
         if (baseAuthRoles.isEmpty()) return Collections.emptySet(); // 默认拒绝
         Set<String> roleCodeSet = baseAuthRoles.stream()
                 .map(ClientKeyBindRolePolicy ::getBindRoleCode)
@@ -61,12 +77,12 @@ public class McpAuthorityResolver {
         return resultSet;
     }
 
-    public Set<String> resolveMcpBizResources(AuthMcpCommonInfo commonInfo) {
+    private Set<String> resolveMcpBizResources(AuthMcpCommonInfo commonInfo) {
         //todo 待实现
         return null;
     }
 
-    public Set<String> resolveMcpBizPrompts(AuthMcpCommonInfo commonInfo) {
+    private Set<String> resolveMcpBizPrompts(AuthMcpCommonInfo commonInfo) {
         //todo 待实现
         return null;
     }

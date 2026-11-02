@@ -11,7 +11,7 @@ public class IdentityTokenParser {
 
     public Set<String> parseDifyUserTokenRoles(String token){
         //todo 这里先模拟
-        return Set.of("sys_admin_role","identity_admin_role","order_admin_role","order_jd_role","code_admin");
+        return Set.of("sys_admin_role","identity_admin_role","order_admin_role","order_jd_role","code_admin_role");
     }
 
     public String parseDifyUserId(String token){

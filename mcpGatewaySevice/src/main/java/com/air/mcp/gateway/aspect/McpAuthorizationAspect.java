@@ -6,6 +6,7 @@ import com.air.mcp.gateway.annotation.permission.RequireMcpToolPermission;
 import com.air.mcp.gateway.auth.PermissionSearchEngine;
 import com.air.mcp.gateway.auth.handler.AbstractClientAuthHandler;
 import com.air.mcp.gateway.enums.McpSupportClientTypeEnums;
+import com.air.mcp.gateway.enums.McpSupportShareTypeEnums;
 import com.air.mcp.gateway.model.identity.AuthMcpCommonInfo;
 import com.air.mcp.gateway.resolver.McpAuthorityResolver;
 import io.modelcontextprotocol.common.McpTransportContext;
@@ -70,7 +71,7 @@ public class McpAuthorizationAspect {
         AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
 
         // 4. 校验权限(调用专门针对 Tool 的解析方法)
-        Set<String> visibleToolsCode = mcpAuthorityResolver.resolveMcpBizTools(authCommonInfo);
+        Set<String> visibleToolsCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo, McpSupportShareTypeEnums.MCP_TOOLS_TYPE);
         if (!visibleToolsCode.contains(toolElementCode)) {
             log.warn("越权调用(tool)拦截: toolElementCode,authCommonInfo={},visibleToolsCode={}",toolElementCode ,authCommonInfo,visibleToolsCode);
             throw McpError.builder(502).message("TOOL_FORBIDDEN:无权调用该工具").build();
@@ -120,7 +121,7 @@ public class McpAuthorizationAspect {
         AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
 
         // 4. 校验权限 (调用专门针对 Resource 的解析方法)
-        Set<String> visibleResourcesCode = mcpAuthorityResolver.resolveMcpBizResources(authCommonInfo);
+        Set<String> visibleResourcesCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo,McpSupportShareTypeEnums.MCP_RESOURCES_TYPE);
         if (!visibleResourcesCode.contains(resourceElementCode)) {
             log.warn("越权访问拦截(Resource):resourceElementCode={}, authCommonInfo={}, visibleResourcesCode={}",resourceElementCode,authCommonInfo,visibleResourcesCode);
             throw McpError.builder(403).message("RESOURCE_FORBIDDEN:无权访问该资源").build();
@@ -166,7 +167,7 @@ public class McpAuthorizationAspect {
         AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
 
         // 校验权限 (调用专门针对 Prompt 的解析方法)
-        Set<String> visiblePromptElementsCode = mcpAuthorityResolver.resolveMcpBizPrompts(authCommonInfo);
+        Set<String> visiblePromptElementsCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo,McpSupportShareTypeEnums.MCP_PROMPT_TYPE);
         if (!visiblePromptElementsCode.contains(promptElementCode)) {
             log.warn("越权访问拦截(Prompt):promptElementCode={} ,authCommonInfo={}, visiblePromptElementsCode={}",promptElementCode,authCommonInfo,visiblePromptElementsCode);
             throw McpError.builder(403).message("PROMPT_FORBIDDEN:无权访问该提示词").build();

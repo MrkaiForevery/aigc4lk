@@ -26,7 +26,6 @@ public class DifyClientAuthHandler extends AbstractClientAuthHandler {
 
     private final JsonMapper jsonMapper;
     private final IdentityTokenParser identityTokenParser;
-    private final McpAuthorityResolver mcpAuthorityResolver;
 
     @Override
     public McpTransportContext extractAuthElementToMcpContext(HttpServletRequest request) {
@@ -73,27 +72,6 @@ public class DifyClientAuthHandler extends AbstractClientAuthHandler {
                 .clientMappingKeyJsonList(roleKeyJsonList)
                 .build();
     }
-
-    @Override
-    public Set<String> searchPermissionList(McpSupportShareTypeEnums shareTypeEnums, AuthMcpCommonInfo commonInfo) {
-        boolean toolFlag = McpSupportShareTypeEnums.equalsByTypeKey(McpSupportShareTypeEnums.MCP_TOOLS_TYPE, shareTypeEnums);
-        boolean resourceFlag = McpSupportShareTypeEnums.equalsByTypeKey(McpSupportShareTypeEnums.MCP_RESOURCES_TYPE, shareTypeEnums);
-        boolean promptFlag = McpSupportShareTypeEnums.equalsByTypeKey(McpSupportShareTypeEnums.MCP_PROMPT_TYPE, shareTypeEnums);
-        if (toolFlag){
-           return mcpAuthorityResolver.resolveMcpBizTools(commonInfo);
-        }
-
-        if (resourceFlag){
-            return mcpAuthorityResolver.resolveMcpBizResources(commonInfo);
-        }
-
-        if (promptFlag){
-            return mcpAuthorityResolver.resolveMcpBizPrompts(commonInfo);
-        }
-
-        return Set.of();
-    }
-
 
 
     @Override

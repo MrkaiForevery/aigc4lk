@@ -9,6 +9,27 @@ spring:
     username: aigc4lk
     password: 123456
     driver-class-name: org.postgresql.Driver
+  # spring ai 配置
+  ai:
+    mcp:
+      server:
+        name: aigc4lk-streamable-http-mcp-gateway
+        version: snapshot-v1.0.0
+        protocol: STREAMABLE
+        type: SYNC
+        enabled: true
+        instructions: "企业级MCP网关，提供订单、用户等业务工具查询。"
+        request-timeout: 60s # 适当延长，给复杂查询留出时间
+        capabilities:
+          resource: false   # 如果完全不用 Resource，直接关闭
+          prompt: false     # 如果完全不用 Prompt，直接关闭
+          completion: true
+        streamable-http:
+          mcp-endpoint: /monitor/mcp
+          keep-alive-interval: 30s # 如果经过代理，建议设置
+        tool-change-notification: false # 工具集在编译期固定，无需运行时通知
+        annotation-scanner:
+          enabled: true
   config:
     import:
       - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
@@ -32,7 +53,13 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
       id-type: auto
   type-handlers-package: com.air.mcp.gateway.pg
+
+logging:
+  level:
+    # 将你的 Mapper 接口所在的包设置为 DEBUG，即可打印 SQL 语句和参数
+    com.air.mcp.gateway.mapper: DEBUG
