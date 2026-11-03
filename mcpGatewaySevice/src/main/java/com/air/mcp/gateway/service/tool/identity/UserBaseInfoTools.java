@@ -24,7 +24,7 @@ public class UserBaseInfoTools {
      * @return
      */
     @McpTool(name = "111000000_1001", description = "查询移动用户的基本信息")
-    @CustomerMcpToolMeta(domainCode = "tool_identity_user_base_query", sensitivityType = "read",elementCode = "111000000_1001")
+    @CustomerMcpToolMeta(domainCode = "111000000", sensitivityType = "read",elementCode = "111000000_1001")
     @RequireMcpToolPermission(toolCode = "111000000_1001",toolName = "queryMobileUserBaseInfo")
     public Map<String, String> queryMobileUserBaseInfo(
             @McpToolParam(description = "用户身份ID", required = true) String userId,

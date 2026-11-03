@@ -89,7 +89,7 @@ public class McpGatewayConfig {
                 .mcpEndpoint(this.streamableHttpEndPointUrl)
                 .contextExtractor(serverRequest -> {
                     HttpServletRequest request = serverRequest.servletRequest();
-                    String clientType = request.getHeader("X-Client-Type");
+                    String clientType = request.getHeader("The-Client-Type");
                     if (StringUtils.isBlank(clientType)){
                         log.error("【⭐】客户端未提供clientType,服务端无法判断连接的客户端类型，拒绝连接...");
                     }

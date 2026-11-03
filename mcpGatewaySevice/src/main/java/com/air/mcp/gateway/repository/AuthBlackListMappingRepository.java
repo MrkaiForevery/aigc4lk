@@ -4,6 +4,7 @@ import com.air.mcp.gateway.mapper.AuthBlackListMappingMapper;
 import com.air.mcp.gateway.mapper.RoleBindElementPolicyMapper;
 import com.air.mcp.gateway.model.auth.AuthBlackListMapping;
 import com.air.mcp.gateway.model.auth.RoleBindElementPolicy;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,8 +23,8 @@ public class AuthBlackListMappingRepository {
     public List<AuthBlackListMapping> findAllBlackListByClientType(String clientTypeKey) {
         LambdaQueryWrapper<AuthBlackListMapping> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.in(AuthBlackListMapping::getClientType,clientTypeKey)
-                .eq(AuthBlackListMapping::getDelLogic,false)
-                .eq(AuthBlackListMapping::getEffectFlag,true);
+                .apply("del_logic = B'0'")
+                .apply("effect_flag = B'0'");
         return authBlackListMappingMapper.selectList(queryWrapper);
     }
 }

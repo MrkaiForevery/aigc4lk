@@ -43,7 +43,6 @@ public class DifyBlackListParserHandler extends AbstractBlackListParserHandler{
                     userIdMap.put(black.getDenyTargetElementCodes(),userIdsElement);
                 }
             } catch (Exception e) {
-                // 处理异常，建议打日志
                 log.error("解析黑名单JSON失败: {}", blackMappingKeyJson.getValue(), e);
             }
         }
@@ -85,16 +84,16 @@ public class DifyBlackListParserHandler extends AbstractBlackListParserHandler{
 
         try {
             JsonNode rootNode = jsonMapper.readTree(userJson);
-            JsonNode listNode = rootNode.get("userIdlist");
+            JsonNode listNode = rootNode.get("user_id_list");
 
             // 防御性判断：确保节点存在且是一个数组
             if (listNode != null && listNode.isArray()) {
                 for (JsonNode node : listNode) {
-                    userIds.add(node.asText()); // 自动转为 String
+                    userIds.add(node.asText());
                 }
             }
         } catch (Exception e) {
-            // 记录解析异常日志
+            log.error("解析dify客户端json黑名单信息失败:{}",userJson);
         }
         return userIds;
     }

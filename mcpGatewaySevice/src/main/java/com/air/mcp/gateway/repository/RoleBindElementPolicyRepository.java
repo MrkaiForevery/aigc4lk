@@ -20,7 +20,7 @@ public class RoleBindElementPolicyRepository {
     public List<RoleBindElementPolicy> findPoliciesByRoles(Set<String> roleCodeSet) {
         LambdaQueryWrapper<RoleBindElementPolicy> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.in(RoleBindElementPolicy::getRoleCode,roleCodeSet)
-                .eq(RoleBindElementPolicy::getDelLogic,false);
+                .apply("del_logic = B'0'");
         return roleBindElementPolicyMapper.selectList(queryWrapper);
     }
 }

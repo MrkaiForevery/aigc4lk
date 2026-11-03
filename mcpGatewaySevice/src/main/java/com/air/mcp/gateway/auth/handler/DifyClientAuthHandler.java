@@ -30,9 +30,10 @@ public class DifyClientAuthHandler extends AbstractClientAuthHandler {
     @Override
     public McpTransportContext extractAuthElementToMcpContext(HttpServletRequest request) {
         //提取 Header里面的参数
-        String clientType = request.getHeader("X-Client-Type");
-        String agentId = request.getHeader("X-Agent-ID");
-        String token = request.getHeader("X-Dify-SSO-Token");
+        String clientType = request.getHeader("The-Client-Type");
+        //todo 这里要注意X-Agent-ID为key可能会被框架本身的元数据值覆盖
+        String agentId = request.getHeader("DF-Agent-ID");
+        String token = request.getHeader("DF-SSO-Token");
         //校验 Token 并解析角色
         Set<String> userRoles = identityTokenParser.parseDifyUserTokenRoles(token);
         String userId = identityTokenParser.parseDifyUserId(token);
