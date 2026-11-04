@@ -2,8 +2,8 @@ package com.air.mcp.gateway.converter;
 
 import com.air.mcp.gateway.enums.McpSupportClientTypeEnums;
 import com.air.mcp.gateway.model.auth.ClientKeyBindRolePolicy;
-import com.air.mcp.gateway.model.bo.ClientKeyBindRolePolicyBO;
-import com.air.mcp.gateway.model.bo.ClientKeyMappingStruct;
+import com.air.mcp.gateway.model.struct.ClientKeyBindRolePolicyStruct;
+import com.air.mcp.gateway.model.struct.ClientKeyMappingStruct;
 import com.alibaba.cloud.commons.lang.StringUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +15,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -26,22 +25,22 @@ public class ClientKeyBindRolePolicyConverter {
 
     private final JsonMapper jsonMapper;
 
-    public List<ClientKeyBindRolePolicyBO> toBOList(List<ClientKeyBindRolePolicy> entities) {
+    public List<ClientKeyBindRolePolicyStruct> toStructList(List<ClientKeyBindRolePolicy> entities) {
         if (CollectionUtils.isEmpty(entities)) {
             return Collections.emptyList();
         }
         return entities.stream()
                 .filter(Objects::nonNull)
-                .map(this::toBO)
+                .map(this::toStruct)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
-    public ClientKeyBindRolePolicyBO toBO(ClientKeyBindRolePolicy entity) {
+    public ClientKeyBindRolePolicyStruct toStruct(ClientKeyBindRolePolicy entity) {
         if (entity == null) {
             return null;
         }
-        return ClientKeyBindRolePolicyBO.builder()
+        return ClientKeyBindRolePolicyStruct.builder()
                 .id(entity.getId())
                 .clientType(entity.getClientType())
                 .clientKeyMappingStruct(

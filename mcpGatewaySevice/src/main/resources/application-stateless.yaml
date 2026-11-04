@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: aigc4lk-mcp-gateway-service-stateless
+  # postgres 数据库连接
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mcp_gateway_db
+    username: aigc4lk
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+  # spring ai 配置
+  ai:
+    mcp:
+      server:
+        name: aigc4lk-streamable-http-mcp-gateway
+        version: stateless-prototype-v1.0.0
+        protocol: STATELESS #这个是无状态传输协议，所以不需要配置上面的额外配置
+        type: SYNC
+        enabled: true
+        instructions: |
+          你是企业MCP网关的客户端助手。
+          本网关提供以下领域的能力：订单查询、用户信息查询、工单创建。
+          不要尝试调用本网关未声明的能力（如支付、物流跟踪）。
+          对于查询类工具，优先使用精确的ID（如订单号）而非模糊描述。
+          如果工具返回权限错误，告知用户联系管理员，不要反复重试。
+        request-timeout: 360s # 适当延长，给复杂查询留出时间
+        stateless:
+          mcp-endpoint: /monitor/stateless/mcp
+          disallow-delete: false # 是否禁止 DELETE 请求，默认 false
+        capabilities:
+          resource: false   # 如果完全不用 Resource，直接关闭
+          prompt: false     # 如果完全不用 Prompt，直接关闭
+          completion: true
+        tool-change-notification: false # 工具集在编译期固定，无需运行时通知
+        annotation-scanner:
+          enabled: true
+  config:
+    import:
+      - nacos:common-chat-model-api-keys.properties?refreshEnabled=true&group=DEFAULT_GROUP&namespace=0f18537a-2027-45f8-9a55-e837fa9fdd2a&username=aigc4lk&password=123456
+  cloud:
+    nacos:
+      # Nacos 服务发现配置
+      discovery:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        username: aigc4lk
+        password: 123456
+      # Nacos 配置中心配置
+      config:
+        server-addr: 127.0.0.1:8848
+        namespace: 0f18537a-2027-45f8-9a55-e837fa9fdd2a
+        group: MCP_GATEWAY_GROUP
+        username: aigc4lk
+        password: 123456
+        cluster-name: aigc4lk-mcp-gateway-service-cluster
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+  type-handlers-package: com.air.mcp.gateway.pg
+
+redisson:
+  singleServerConfig:
+    address: "redis://localhost:6379"
+    # password: 你的密码（如果没有则删除该行）
+    # database: 0
+    connectionMinimumIdleSize: 5
+    connectionPoolSize: 10

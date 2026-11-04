@@ -1,13 +1,10 @@
-package com.air.mcp.gateway.model.bo;
+package com.air.mcp.gateway.model.struct;
 
-import com.baomidou.mybatisplus.annotation.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.postgresql.util.PGobject;
 
-import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -18,7 +15,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ClientKeyBindRolePolicyBO implements Serializable, Cloneable {
+public class ClientKeyBindRolePolicyStruct {
 
     /** 主键id,; */
     private Integer id;

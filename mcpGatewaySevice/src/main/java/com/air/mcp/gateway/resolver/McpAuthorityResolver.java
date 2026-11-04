@@ -2,19 +2,15 @@ package com.air.mcp.gateway.resolver;
 
 import com.air.mcp.gateway.auth.PermissionSearchEngine;
 import com.air.mcp.gateway.auth.handler.AbstractBlackListParserHandler;
-import com.air.mcp.gateway.enums.McpSupportClientTypeEnums;
 import com.air.mcp.gateway.enums.McpSupportShareTypeEnums;
 import com.air.mcp.gateway.model.auth.AuthBlackListMapping;
-import com.air.mcp.gateway.model.auth.ClientKeyBindRolePolicy;
 import com.air.mcp.gateway.model.auth.RoleBindElementPolicy;
-import com.air.mcp.gateway.model.bo.ClientKeyBindRolePolicyBO;
+import com.air.mcp.gateway.model.struct.ClientKeyBindRolePolicyStruct;
 import com.air.mcp.gateway.model.identity.AuthMcpCommonInfo;
-import com.air.mcp.gateway.registry.McpBizToolsRegistry;
 import com.air.mcp.gateway.repository.ClientKeyBindRolePolicyRepository;
 import com.air.mcp.gateway.repository.RoleBindElementPolicyRepository;
 import com.air.mcp.gateway.repository.AuthBlackListMappingRepository;
 import lombok.RequiredArgsConstructor;
-import org.postgresql.util.PGobject;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -52,11 +48,11 @@ public class McpAuthorityResolver {
      */
     private Set<String> resolveMcpBizTools(AuthMcpCommonInfo commonInfo) {
         //获取对应的权限角色列表
-        List<ClientKeyBindRolePolicyBO> baseAuthRoles =  clientKeyBindRolePolicyRepository.findBaseAuthRoles(commonInfo.getClientTypeEnum().getTypeKey(), commonInfo.getClientMappingKeyJsonList());
+        List<ClientKeyBindRolePolicyStruct> baseAuthRoles =  clientKeyBindRolePolicyRepository.findBaseAuthRoles(commonInfo.getClientTypeEnum().getTypeKey(), commonInfo.getClientMappingKeyJsonList());
         // 默认拒绝
         if (baseAuthRoles.isEmpty()) return Collections.emptySet();
         Set<String> roleCodeSet = baseAuthRoles.stream()
-                .map(ClientKeyBindRolePolicyBO ::getBindRoleCode)
+                .map(ClientKeyBindRolePolicyStruct::getBindRoleCode)
                 .collect(Collectors.toSet());
 
         // 获取所有相关role-auth策略矩阵数据

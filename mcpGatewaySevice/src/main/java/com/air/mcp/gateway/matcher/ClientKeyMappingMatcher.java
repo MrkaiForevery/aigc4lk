@@ -1,8 +1,8 @@
 package com.air.mcp.gateway.matcher;
 
 import com.air.mcp.gateway.enums.McpSupportClientTypeEnums;
-import com.air.mcp.gateway.model.bo.ClientKeyBindRolePolicyBO;
-import com.air.mcp.gateway.model.bo.ClientKeyMappingStruct;
+import com.air.mcp.gateway.model.struct.ClientKeyBindRolePolicyStruct;
+import com.air.mcp.gateway.model.struct.ClientKeyMappingStruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import org.springframework.stereotype.Component;
@@ -19,9 +19,9 @@ public class ClientKeyMappingMatcher {
     /**
      * 从 BO 列表里筛出至少匹配一个 param 的记录
      */
-    public List<ClientKeyBindRolePolicyBO> filterMatchRoles(McpSupportClientTypeEnums clientType,
-                                                            List<ClientKeyBindRolePolicyBO> candidates,
-                                                            List<ClientKeyMappingStruct> params) {
+    public List<ClientKeyBindRolePolicyStruct> filterMatchRoles(McpSupportClientTypeEnums clientType,
+                                                                List<ClientKeyBindRolePolicyStruct> candidates,
+                                                                List<ClientKeyMappingStruct> params) {
         if (CollectionUtils.isEmpty(candidates) || CollectionUtils.isEmpty(params)) {
             return Collections.emptyList();
         }

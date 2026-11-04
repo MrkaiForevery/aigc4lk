@@ -1,11 +1,9 @@
-package com.air.mcp.gateway.model.bo;
+package com.air.mcp.gateway.model.struct;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.io.Serializable;
 
 /**
  * 客户端权限key结构对象
@@ -15,7 +13,7 @@ import java.io.Serializable;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ClientKeyMappingStruct implements Serializable, Cloneable {
+public class ClientKeyMappingStruct {
 
     /** dify客户端映射key结构,; */
     private DifyClientKeyStruct difyClientKeyStruct;

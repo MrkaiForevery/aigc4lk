@@ -115,7 +115,7 @@ aigc4lk（父POM）
 5. `mcp/RemoteMcpToolProvider.java` — 远程MCP工具提供者
 6. `tools/*Tools.java` — Agent专用工具/函数
 7. 基于技能的专用能力工具（如 DocumentAgent 中的 `AgentSkillsProperties` + `DynamicAgentCardProvider`）
-8. `application.yaml` — 配置（A2A注册需要Nacos服务发现；设置 `is_relation_agent: true`）
+8. `application-streamable.yaml` — 配置（A2A注册需要Nacos服务发现；设置 `is_relation_agent: true`）
 
 ### 平台公共层核心抽象（`platformCommon`）
 
