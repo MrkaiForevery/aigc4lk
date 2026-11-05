@@ -11,6 +11,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
+/**
+ * @McpTool中的name必须全局唯一
+ */
 @Service
 @RequiredArgsConstructor
 public class UserBaseInfoTools {
@@ -23,9 +26,9 @@ public class UserBaseInfoTools {
      * @param ctx
      * @return
      */
-    @McpTool(name = "111000000_1001", description = "查询移动用户的基本信息")
-    @CustomerMcpToolMeta(domainCode = "111000000", sensitivityType = "read",elementCode = "111000000_1001")
-    @RequireMcpToolPermission(toolCode = "111000000_1001",toolName = "queryMobileUserBaseInfo")
+    @McpTool(name = "query_mobile_user_base_info", description = "查询移动用户的基本信息")
+    @CustomerMcpToolMeta(domainCode = "111000000", sensitivityType = "read",elementCode = "query_mobile_user_base_info")
+    @RequireMcpToolPermission(toolCode = "query_mobile_user_base_info",toolName = "queryMobileUserBaseInfo")
     public Map<String, String> queryMobileUserBaseInfo(
             @McpToolParam(description = "用户身份ID", required = true) String userId,
             @McpToolParam(description = "系统标识", required = true) String systemId,

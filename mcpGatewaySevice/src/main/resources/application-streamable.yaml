@@ -24,9 +24,9 @@ spring:
           如果工具返回权限错误，告知用户联系管理员，不要反复重试。
         request-timeout: 360s # 适当延长，给复杂查询留出时间
         capabilities:
-          resource: false   # 如果完全不用 Resource，直接关闭
-          prompt: false     # 如果完全不用 Prompt，直接关闭
-          completion: true
+          resource: true   # 如果完全不用 Resource，直接关闭
+          prompt: true     # 如果完全不用 Prompt，直接关闭
+          completion: true #开启补全能力-用于给 Prompt 或 Resource 的 URI 提供“参数自动补全建议”（就像你在输入框里打字，下拉给提示）
         streamable-http:
           mcp-endpoint: /monitor/streamable/mcp
           keep-alive-interval: 10s # 这个是有状态配置-心跳ping检测间隔

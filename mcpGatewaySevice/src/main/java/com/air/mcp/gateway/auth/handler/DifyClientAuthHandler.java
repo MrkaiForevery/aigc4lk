@@ -54,7 +54,7 @@ public class DifyClientAuthHandler extends AbstractClientAuthHandler {
 
         //构造黑名单检查keyList
         List<String> userIdList = List.of(userId);
-        Map<String, Object> userIdMap = Map.of("user_Id_list", userIdList);
+        Map<String, Object> userIdMap = Map.of("user_id_list", userIdList);
         String blackUserIdCheckJson = jsonMapper.writeValueAsString(userIdMap);
         List<String> blackJsonList = new ArrayList<>();
         blackJsonList.add(blackUserIdCheckJson);

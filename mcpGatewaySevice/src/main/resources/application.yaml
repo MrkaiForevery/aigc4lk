@@ -4,4 +4,4 @@ server:
 logging:
   level:
     # 将你的 Mapper 接口所在的包设置为 DEBUG，即可打印 SQL 语句和参数
-    com.air.mcp.gateway.mapper: DEBUG
+    com.air.mcp.gateway.mapper: info

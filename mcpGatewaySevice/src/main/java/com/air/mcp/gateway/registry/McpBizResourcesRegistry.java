@@ -11,10 +11,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 将所有McpResources通过执行BeanPostProcessor后置方式更新注册置IOC中,
- * 保证注入顺序,方便后续从IOC中取
+ * 将所有@McpResource通过执行BeanPostProcessor后置方式更新注册置IOC中,
+ * 这是为了在启动过程,保证所有的McpResource在注册过程中能把@CustomerMcpResourceMeta
+ * 这种类似于用户自定义的注解里面的元数据暴露出来。暂时没有作用，可以保留
  */
-
 @Component
 public class McpBizResourcesRegistry implements BeanPostProcessor {
 

@@ -1,4 +1,4 @@
-package com.air.mcp.gateway.service.tool.identity;
+package com.air.mcp.gateway.service.tool.code;
 
 import com.air.mcp.gateway.annotation.meta.CustomerMcpToolMeta;
 import com.air.mcp.gateway.annotation.permission.RequireMcpToolPermission;
@@ -13,16 +13,19 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @McpTool中的name必须全局唯一
+ */
 @Service
 @RequiredArgsConstructor
 public class CodeTestTools {
 
-    @McpTool(name = "211100000_1001", description = "查询项目信息列表")
-    @CustomerMcpToolMeta(domainCode = "210000000", sensitivityType = "read", elementCode = "211100000_1001")
-    @RequireMcpToolPermission(toolCode = "211100000_1001", toolName = "queryProjectBaseInfoList")
-    public List<BaseCodeCheckResultDTO> queryProjectBaseInfoList(
+    @McpTool(name = "query_code_check_result_base_info", description = "查询代码检查的结果信息信息列表")
+    @CustomerMcpToolMeta(domainCode = "210000000", sensitivityType = "read", elementCode = "query_code_check_result_base_info")
+    @RequireMcpToolPermission(toolCode = "query_code_check_result_base_info", toolName = "queryCodeCheckResultBaseInfo")
+    public List<BaseCodeCheckResultDTO> queryCodeCheckResultBaseInfo(
             @McpToolParam(description = "用户身份ID", required = true) String userId,
-            @McpToolParam(description = "系统标识", required = true) String systemId,
+            @McpToolParam(description = "所属系统标识", required = true) String systemId,
             McpTransportContext ctx) {
         //todo 这里先模拟返回
         BaseCodeCheckResultDTO dto1 = BaseCodeCheckResultDTO.builder()

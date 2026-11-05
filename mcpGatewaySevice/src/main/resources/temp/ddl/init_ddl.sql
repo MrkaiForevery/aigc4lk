@@ -79,7 +79,7 @@ COMMENT ON COLUMN auth_element_def.id IS '主键id';
 COMMENT ON COLUMN auth_element_def.element_type IS '元素类型(tool/resource/prompt)';
 COMMENT ON COLUMN auth_element_def.sensitivity_type IS '元素敏感度类型(read/write/...)';
 COMMENT ON COLUMN auth_element_def.element_code IS '元素编码';
-COMMENT ON COLUMN auth_element_def.element_name IS '元素名称';
+COMMENT ON COLUMN auth_element_def.element_code IS '元素编码(tool 类别使用toolName为唯一code，resource类别以resourceUri为唯一code，prompt类别以promptName为唯一code)';
 COMMENT ON COLUMN auth_element_def.relation_domain_code IS '元素所在域编码';
 COMMENT ON COLUMN auth_element_def.description IS '元素描述';
 COMMENT ON COLUMN auth_element_def.del_logic IS '逻辑删除标识';
@@ -179,3 +179,30 @@ ALTER TABLE public.auth_black_list_mapping ALTER COLUMN black_mapping_key_json T
 ALTER TABLE public.auth_element_def ADD CONSTRAINT "UQ_ELEMENT_CODE" UNIQUE (element_code);
 ALTER TABLE public.auth_domain_def ADD CONSTRAINT "UQ_DOMAIN_CODE" UNIQUE (domain_code);
 ALTER TABLE public.auth_role_def ADD CONSTRAINT "UQ_ROLE_CODE" UNIQUE (role_code);
+
+CREATE TABLE public.machine_list_info (
+                                          machine_id varchar NULL,
+                                          machine_name varchar NULL,
+                                          owner_id varchar NULL
+);
+
+-- Column comments
+
+COMMENT ON COLUMN public.machine_list_info.machine_id IS '机器唯一标识id';
+COMMENT ON COLUMN public.machine_list_info.machine_name IS '机器名称';
+COMMENT ON COLUMN public.machine_list_info.owner_id IS '所有者id';
+
+CREATE TABLE public.machine_detail_info (
+                                            machine_id varchar NULL,
+                                            machine_name varchar NULL,
+                                            owner_id varchar NULL,
+                                            detail_description varchar NULL,
+                                            "location" varchar NULL
+);
+
+-- Column comments
+
+COMMENT ON COLUMN public.machine_detail_info.machine_id IS '机器唯一标识id';
+COMMENT ON COLUMN public.machine_detail_info.machine_name IS '机器名称';
+COMMENT ON COLUMN public.machine_detail_info.owner_id IS '所有者id';
+COMMENT ON COLUMN public.machine_detail_info.detail_description IS '详细描述';

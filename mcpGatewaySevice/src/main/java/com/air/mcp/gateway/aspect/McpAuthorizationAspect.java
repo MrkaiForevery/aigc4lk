@@ -17,6 +17,7 @@ import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.jspecify.annotations.NonNull;
 import org.springframework.ai.mcp.annotation.McpPrompt;
 import org.springframework.ai.mcp.annotation.McpResource;
 import org.springframework.ai.mcp.annotation.McpTool;
@@ -43,43 +44,19 @@ import java.util.Set;
 @Slf4j
 public class McpAuthorizationAspect {
 
+    private static final String CLIENT_TYPE_KEY_NAME = "clientType";
+
     private final McpAuthorityResolver mcpAuthorityResolver;
     private final PermissionSearchEngine permissionSearchEngine;
 
-    // ======================== Tool 权限拦截 ========================
+    // ======================== Tool 权限拦截【toolName】 ========================
     @Before("@annotation(requireMcpToolPermission) && @annotation(org.springframework.ai.mcp.annotation.McpTool)")
     public void checkMcpToolsPermission(JoinPoint joinPoint, RequireMcpToolPermission requireMcpToolPermission) {
         // 获取当前被拦截的tool方法
         String toolElementCode = getToolElementCode(joinPoint, requireMcpToolPermission);
 
-        // 从方法参数中提取 McpTransportContext
-        McpTransportContext ctx = extractTransportContext(joinPoint.getArgs());
-        if (ctx == null) {
-            throw McpError.builder(500).message("INVALID_CONTEXT:无法获取 MCP 传输上下文").build();
-        }
-
-        // 获取指定的handler
-        String clientType = (String) ctx.get("clientType");
-        if (clientType == null) {
-            // 如果上下文里没有 clientType，说明前面的传输层处理有漏洞，直接拦截
-            throw McpError.builder(401).message("UNAUTHORIZED:请求上下文中缺失客户端类型").build();
-        }
-        McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
-        AbstractClientAuthHandler clientAuthHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
-        if (clientTypeEnum == null) {
-            throw McpError.builder(400).message("BAD_REQUEST:不支持的客户端类型").build();
-        }
-
-        if (clientAuthHandler == null) {
-            log.error("服务端配置错误：找不到对应的客户端鉴权处理器, clientType={}", clientType);
-            throw McpError.builder(500).message("INTERNAL_ERROR:未配置对应的鉴权处理器").build();
-        }
-
-        //使用handler构建权限通用对象
-        AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
-        if (authCommonInfo == null) {
-            throw McpError.builder(401).message("UNAUTHORIZED:身份信息解析失败").build();
-        }
+        // 获取AuthMcpCommonInfo
+        AuthMcpCommonInfo authCommonInfo = findAuthCommonInfo(joinPoint);
 
         // 校验权限(调用专门针对 Tool 的解析方法)
         Set<String> visibleToolsCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo, McpSupportShareTypeEnums.MCP_TOOLS_TYPE);
@@ -107,41 +84,17 @@ public class McpAuthorizationAspect {
     }
 
 
-    // ======================== Resource 权限拦截 ========================
+    // ======================== Resource 权限拦截【resourceUri】 ========================
     @Before("@annotation(requireMcpResourcePermission) && @annotation(org.springframework.ai.mcp.annotation.McpResource)")
     public void checkMcpResourcePermission(JoinPoint joinPoint, RequireMcpResourcePermission requireMcpResourcePermission) {
-        // 获取当前被拦截的 ResourceCode 标识
+        // 获取当前被拦截的 Resource唯一标识
         String resourceElementCode = getResourceElementKey(joinPoint, requireMcpResourcePermission);
 
-        // 提取身份信息
-        McpTransportContext ctx = extractTransportContext(joinPoint.getArgs());
-        if (ctx == null) {
-            throw McpError.builder(500).message("INVALID_CONTEXT:无法获取 MCP 传输上下文").build();
-        }
-
-        // 获取指定的handler
-        String clientType = (String) ctx.get("clientType");
-        if (clientType == null) {
-            throw McpError.builder(401).message("UNAUTHORIZED:请求上下文中缺失客户端类型").build();
-        }
-        McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
-        if (clientTypeEnum == null) {
-            throw McpError.builder(400).message("BAD_REQUEST:不支持的客户端类型").build();
-        }
-        AbstractClientAuthHandler clientAuthHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
-        if (clientAuthHandler == null) {
-            log.error("服务端配置错误：找不到对应的客户端鉴权处理器, clientType={}", clientType);
-            throw McpError.builder(500).message("INTERNAL_ERROR:未配置对应的鉴权处理器").build();
-        }
-
-        //使用handler构建权限通用对象
-        AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
-        if (authCommonInfo == null) {
-            throw McpError.builder(401).message("UNAUTHORIZED:身份信息解析失败").build();
-        }
+        // 获取AuthMcpCommonInfo
+        AuthMcpCommonInfo authCommonInfo = findAuthCommonInfo(joinPoint);
 
         // 校验权限 (调用专门针对 Resource 的解析方法)
-        Set<String> visibleResourcesCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo,McpSupportShareTypeEnums.MCP_RESOURCES_TYPE);
+        Set<String> visibleResourcesCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo, McpSupportShareTypeEnums.MCP_RESOURCES_TYPE);
         if (!visibleResourcesCode.contains(resourceElementCode)) {
             log.warn("越权访问拦截(Resource): resourceElementCode={}, authCommonInfo={}, visibleResourcesCode={}", resourceElementCode, authCommonInfo, visibleResourcesCode);
             throw McpError.builder(403).message("RESOURCE_FORBIDDEN:无权访问该资源").build();
@@ -159,7 +112,7 @@ public class McpAuthorizationAspect {
         Method method = signature.getMethod();
         McpResource resource = method.getAnnotation(McpResource.class);
 
-        return resource.name();
+        return resource.uri();
     }
 
     // ======================== Prompt 权限拦截 ========================
@@ -168,35 +121,11 @@ public class McpAuthorizationAspect {
         // 获取当前被拦截的 Prompt 标识
         String promptElementCode = getPromptElementCode(joinPoint, requireMcpPromptPermission);
 
-        // 2. 提取身份信息
-        McpTransportContext ctx = extractTransportContext(joinPoint.getArgs());
-        if (ctx == null) {
-            throw McpError.builder(500).message("INVALID_CONTEXT:无法获取 MCP 传输上下文").build();
-        }
-
-        // 获取指定的handler
-        String clientType = (String) ctx.get("clientType");
-        if (clientType == null) {
-            throw McpError.builder(401).message("UNAUTHORIZED:请求上下文中缺失客户端类型").build();
-        }
-        McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
-        if (clientTypeEnum == null) {
-            throw McpError.builder(400).message("BAD_REQUEST:不支持的客户端类型").build();
-        }
-        AbstractClientAuthHandler clientAuthHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
-        if (clientAuthHandler == null) {
-            log.error("服务端配置错误：找不到对应的客户端鉴权处理器, clientType={}", clientType);
-            throw McpError.builder(500).message("INTERNAL_ERROR:未配置对应的鉴权处理器").build();
-        }
-
-        //使用handler构建权限通用对象
-        AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
-        if (authCommonInfo == null) {
-            throw McpError.builder(401).message("UNAUTHORIZED:身份信息解析失败").build();
-        }
+        // 获取AuthMcpCommonInfo
+        AuthMcpCommonInfo authCommonInfo = findAuthCommonInfo(joinPoint);
 
         // 校验权限 (调用专门针对 Prompt 的解析方法)
-        Set<String> visiblePromptElementsCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo,McpSupportShareTypeEnums.MCP_PROMPT_TYPE);
+        Set<String> visiblePromptElementsCode = mcpAuthorityResolver.resolveAuthElements(authCommonInfo, McpSupportShareTypeEnums.MCP_PROMPT_TYPE);
         if (!visiblePromptElementsCode.contains(promptElementCode)) {
             log.warn("越权访问拦截(Prompt): promptElementCode={}, authCommonInfo={}, visiblePromptElementsCode={}", promptElementCode, authCommonInfo, visiblePromptElementsCode);
             throw McpError.builder(403).message("PROMPT_FORBIDDEN:无权访问该提示词").build();
@@ -218,7 +147,14 @@ public class McpAuthorizationAspect {
     }
 
 
-    // 从参数数组中找出 McpTransportContext
+    // ======================== 公共方法 ========================
+
+    /**
+     * 从参数数组中找出 McpTransportContext
+     *
+     * @param args
+     * @return
+     */
     private McpTransportContext extractTransportContext(Object[] args) {
         if (args == null) return null;
         for (Object arg : args) {
@@ -227,5 +163,43 @@ public class McpAuthorizationAspect {
             }
         }
         return null;
+    }
+
+    /**
+     * 获取标准的鉴权对象
+     *
+     * @param joinPoint
+     * @return
+     */
+    private @NonNull AuthMcpCommonInfo findAuthCommonInfo(JoinPoint joinPoint) {
+        // 从方法参数中提取 McpTransportContext
+        McpTransportContext ctx = extractTransportContext(joinPoint.getArgs());
+        if (ctx == null) {
+            throw McpError.builder(500).message("INVALID_CONTEXT:无法获取 MCP 传输上下文").build();
+        }
+
+        // 获取指定的handler
+        String clientType = (String) ctx.get(CLIENT_TYPE_KEY_NAME);
+        if (clientType == null) {
+            // 如果上下文里没有 clientType，说明前面的传输层处理有漏洞，直接拦截
+            throw McpError.builder(401).message("UNAUTHORIZED:请求上下文中缺失客户端类型").build();
+        }
+        McpSupportClientTypeEnums clientTypeEnum = McpSupportClientTypeEnums.getByTypeKey(clientType);
+        AbstractClientAuthHandler clientAuthHandler = permissionSearchEngine.findAuthHandlerByClientKeyEnum(clientTypeEnum);
+        if (clientTypeEnum == null) {
+            throw McpError.builder(400).message("BAD_REQUEST:不支持的客户端类型").build();
+        }
+
+        if (clientAuthHandler == null) {
+            log.error("服务端配置错误：找不到对应的客户端鉴权处理器, clientType={}", clientType);
+            throw McpError.builder(500).message("INTERNAL_ERROR:未配置对应的鉴权处理器").build();
+        }
+
+        //使用handler构建权限通用对象
+        AuthMcpCommonInfo authCommonInfo = clientAuthHandler.buildMcpContextAuthObject(ctx);
+        if (authCommonInfo == null) {
+            throw McpError.builder(401).message("UNAUTHORIZED:身份信息解析失败").build();
+        }
+        return authCommonInfo;
     }
 }

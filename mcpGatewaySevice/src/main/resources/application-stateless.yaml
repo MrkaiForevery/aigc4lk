@@ -27,9 +27,9 @@ spring:
           mcp-endpoint: /monitor/stateless/mcp
           disallow-delete: false # 是否禁止 DELETE 请求，默认 false
         capabilities:
-          resource: false   # 如果完全不用 Resource，直接关闭
-          prompt: false     # 如果完全不用 Prompt，直接关闭
-          completion: true
+          resource: true   # 如果完全不用 Resource，直接关闭
+          prompt: true     # 如果完全不用 Prompt，直接关闭
+          completion: false # 关掉补全能力-用于给 Prompt 或 Resource 的 URI 提供“参数自动补全建议”（就像你在输入框里打字，下拉给提示）
         tool-change-notification: false # 工具集在编译期固定，无需运行时通知
         annotation-scanner:
           enabled: true
